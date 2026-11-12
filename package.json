@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "description": "Painel operacional e administrativo Prius",
   "scripts": {
-    "dev": "vite --port 3000 --host",
+    "dev": "vite",
     "build": "vite build",
+    "lint": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {

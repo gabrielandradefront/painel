@@ -299,19 +299,34 @@ function viewOperacional() {
   }
 
   if (subTabSemana === 'resumos') {
+    const textoPadrao = typeof gerarResumoOperacional === 'function' ? gerarResumoOperacional(resumoTipoAtual || 'dia') : '';
+    const textoAtual = (typeof resumoTextoCustomizado === 'string') ? resumoTextoCustomizado : textoPadrao;
+
     let cardResumos = `
       <div class="card">
         <h2>📊 Central de Resumos e Relatórios</h2>
         <div class="mu" style="margin-bottom:14px;">Gere relatórios compilados prontos para envio no WhatsApp da equipe e coordenação:</div>
         <div class="fx" style="gap:8px; margin-bottom:14px;">
-          <button class="b p" data-act="copiar_resumo" data-tipo="dia" title="Copiar briefing de hoje">☀️ Resumo de Hoje</button>
-          <button class="b p" data-act="copiar_resumo" data-tipo="1" title="Copiar compilado de 1 semana (7 dias)">1 Semana (7 dias)</button>
-          <button class="b p" data-act="copiar_resumo" data-tipo="2" title="Copiar compilado de 2 semanas (14 dias)">2 Semanas (14 dias)</button>
-          <button class="b p" data-act="copiar_resumo" data-tipo="3" title="Copiar compilado de 3 semanas (21 dias)">3 Semanas (21 dias)</button>
-          <button class="b data-act="copiar_resumo" data-tipo="4" style="border-color:var(--ac); color:var(--ac); font-weight:600;" title="Copiar compilado do mês (28 dias)">🗓️ Mês (4 Semanas)</button>
+          <button class="b ${resumoTipoAtual === 'dia' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="dia" title="Carregar e copiar briefing de hoje">☀️ Resumo de Hoje</button>
+          <button class="b ${resumoTipoAtual === '1' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="1" title="Carregar e copiar compilado de 1 semana (7 dias)">1 Semana (7 dias)</button>
+          <button class="b ${resumoTipoAtual === '2' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="2" title="Carregar e copiar compilado de 2 semanas (14 dias)">2 Semanas (14 dias)</button>
+          <button class="b ${resumoTipoAtual === '3' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="3" title="Carregar e copiar compilado de 3 semanas (21 dias)">3 Semanas (21 dias)</button>
+          <button class="b ${resumoTipoAtual === '4' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="4" style="${resumoTipoAtual !== '4' ? 'border-color:var(--ac); color:var(--ac); font-weight:600;' : ''}" title="Carregar e copiar compilado do mês (28 dias)">🗓️ Mês (4 Semanas)</button>
         </div>
-        <div class="mu" style="font-size:12px; margin-bottom:6px;">Prévia do briefing de hoje (clique em qualquer botão acima para copiar o respectivo período):</div>
-        <div style="background:var(--bg); border:1px solid var(--bd); border-radius:8px; padding:12px; font-family:monospace; font-size:12.5px; white-space:pre-wrap; line-height:1.5; color:var(--tx); max-height:340px; overflow-y:auto;">${esc(gerarResumoOperacional('dia'))}</div>
+        <div class="mu" style="font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+          <span>✏️ <b>Área editável</b> (clique no texto abaixo para alterar livremente ou nos botões acima para alternar períodos):</span>
+          <div style="display:flex; gap:6px;">
+            <button class="b" data-act="copiar_resumo_editado" style="font-size:11.5px; padding:3px 9px;" title="Copiar exatamente o que foi editado abaixo">📋 Copiar texto editado</button>
+            <button class="b" data-act="restaurar_resumo_original" style="font-size:11.5px; padding:3px 9px;" title="Recarregar o modelo padrão">🔄 Restaurar original</button>
+          </div>
+        </div>
+        <div id="campoResumoEditavel" 
+             contenteditable="true" 
+             spellcheck="false" 
+             role="textbox" 
+             aria-multiline="true" 
+             data-placeholder="Digite ou edite o resumo operacional aqui..." 
+             style="background:var(--bg); border:1.5px solid var(--bd); border-radius:8px; padding:12px; font-family:monospace; font-size:12.5px; white-space:pre-wrap; line-height:1.5; color:var(--tx); min-height:220px; max-height:420px; overflow-y:auto; cursor:text; outline:none; transition:border-color 0.15s ease, box-shadow 0.15s ease;">${esc(textoAtual)}</div>
       </div>
     `;
     return subNav + cardResumos;

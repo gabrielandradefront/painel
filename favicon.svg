@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1c1f26"/>
+      <stop offset="100%" stop-color="#0c0e12"/>
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#f59e0b" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background Squircle Container -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bgGrad)" stroke="#323846" stroke-width="2.5"/>
+
+  <!-- Subtle Ambient Corner Light -->
+  <circle cx="50" cy="14" r="5" fill="#f59e0b" opacity="0.3"/>
+
+  <!-- Prius Monogram "P" -->
+  <g filter="url(#glow)">
+    <!-- Main P Letterform -->
+    <path d="M19 14 H34.5 C42.5 14 47.5 19 47.5 26.5 C47.5 34 42.5 39 34.5 39 H27 V48 C27 49.1 26.1 50 25 50 H21 C19.9 50 19 49.1 19 48 V14 Z M27 21 V32 H34 C37.8 32 40.2 29.8 40.2 26.5 C40.2 23.2 37.8 21 34 21 H27 Z" 
+          fill="url(#amberGrad)"/>
+    <!-- Internal Precision Chevron / Spark -->
+    <polygon points="35,26.5 30.5,23.5 32.5,26.5 30.5,29.5" fill="#ffffff" opacity="0.95"/>
+  </g>
+</svg>

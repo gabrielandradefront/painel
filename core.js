@@ -4,6 +4,19 @@
 ======================================================== */
 
 const KEY = 'prius-painel-v2';
+
+// Controle de Tema (Claro / Escuro)
+function aplicarTema(t) {
+  const tema = t || localStorage.getItem(KEY + '-tema') || 'dark';
+  if (tema === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  try { localStorage.setItem(KEY + '-tema', tema); } catch (e) {}
+  return tema;
+}
+aplicarTema();
 const pad = n => String(n).padStart(2, '0');
 const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const addD = (s, n) => {
@@ -162,9 +175,11 @@ let prodFiltroHist = '';
 let modoEntradaCronograma = 'pdf'; // 'pdf', 'texto', 'novo'
 let novaTurmaManualNome = '';
 let drawerAberto = false;
+let resumoTextoCustomizado = null;
+let resumoTipoAtual = 'dia';
 
 let prev = null, pend = null, wk = 0, turmaPad = '', msg = '';
-let repFiltro = 'abertos', buscaAulas = '', showPast = false, buscaGlobalTermo = '';
+let repFiltro = 'abertos', buscaAulas = '', showPast = false, buscaGlobalTermo = '', buscaGlobalTipo = 'todos';
 let dest = 'novo', nomeNovo = '', destPre = '', orcAsk = false;
 
 // Notificações e utilitários de interface

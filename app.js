@@ -64,6 +64,60 @@ function reverterSnapshot() {
 
 // --- ABA CONFIGURAÇÕES ---
 function viewConfig() {
+  const temaAtual = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const isLight = temaAtual === 'light';
+
+  let temaHtml = `
+    <div style="margin-bottom: 6px;">
+      <div class="mu" style="margin-bottom: 12px; font-size: 13px;">
+        Personalize o tema visual do painel. Sua escolha fica gravada neste navegador com suporte a cores nítidas e alto contraste:
+      </div>
+
+      <div class="theme-selector-grid">
+        <div class="theme-card-option ${!isLight ? 'selected' : ''}" data-act="set_tema" data-tema="dark" role="button" tabindex="0" title="Ativar Modo Escuro">
+          <div class="theme-card-preview dark-preview">
+            <div class="preview-header"></div>
+            <div class="preview-body">
+              <div class="preview-line accent"></div>
+              <div class="preview-line"></div>
+            </div>
+          </div>
+          <div class="theme-card-info">
+            <div class="theme-card-title">
+              <span>🌙 Modo Escuro</span>
+              ${!isLight ? '<span class="pill o" style="font-size:10.5px; padding:1px 7px;">✓ Ativo</span>' : ''}
+            </div>
+            <span class="mu" style="font-size:11.5px;">Tema Notion Midnight com acentos Âmbar</span>
+          </div>
+        </div>
+
+        <div class="theme-card-option ${isLight ? 'selected' : ''}" data-act="set_tema" data-tema="light" role="button" tabindex="0" title="Ativar Modo Claro">
+          <div class="theme-card-preview light-preview">
+            <div class="preview-header"></div>
+            <div class="preview-body">
+              <div class="preview-line accent"></div>
+              <div class="preview-line"></div>
+            </div>
+          </div>
+          <div class="theme-card-info">
+            <div class="theme-card-title">
+              <span>☀️ Modo Claro</span>
+              ${isLight ? '<span class="pill o" style="font-size:10.5px; padding:1px 7px;">✓ Ativo</span>' : ''}
+            </div>
+            <span class="mu" style="font-size:11.5px;">Alto contraste para ambientes iluminados</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <span class="mu" style="font-size: 12.5px;">Tema atual: <b style="color:var(--tx);">${isLight ? '☀️ Modo Claro (Alto Contraste)' : '🌙 Modo Escuro (Midnight & Amber)'}</b></span>
+        <button class="b p" data-act="toggle_tema" style="display:inline-flex; align-items:center; gap:6px;">
+          <span>${isLight ? '🌙 Alternar para Modo Escuro' : '☀️ Alternar para Modo Claro'}</span>
+        </button>
+      </div>
+    </div>
+  `;
+
   const st = getStorageUsage();
   const totalAulas = S.aulas.length;
   const passadas = S.aulas.filter(a => a.dia < hoje).length;
@@ -128,7 +182,8 @@ function viewConfig() {
     backupHtml += `<div style="margin-top:10px;"><button class="b" data-act="bkp_reverter">Desfazer última restauração (${snapTxt})</button></div>`;
   }
 
-  return card('📊 Consumo de Memória & Limpeza Segura', storageHtml) + 
+  return card('🎨 Aparência & Tema do Painel', temaHtml) +
+         card('📊 Consumo de Memória & Limpeza Segura', storageHtml) + 
          card('💾 Backup e Restauração de Dados', backupHtml) + 
          (typeof cardApelidos === 'function' ? cardApelidos() : '');
 }
@@ -136,7 +191,10 @@ function viewConfig() {
 // --- GAVETA LATERAL DE LEMBRETES (DRAWER) ---
 function renderDrawer() {
   const lembretes = S.lembretes || [];
-  const pendentes = lembretes.filter(l => !l.feito).length;
+  const total = lembretes.length;
+  const concluidos = lembretes.filter(l => l.feito).length;
+  const pendentes = total - concluidos;
+  const pct = total === 0 ? 0 : Math.round((concluidos / total) * 100);
   const badgeHtml = pendentes > 0 ? `<span class="drawer-badge">${pendentes}</span>` : '';
 
   let itensHtml = lembretes.map(l => `
@@ -149,6 +207,37 @@ function renderDrawer() {
       <button class="x" data-act="del_lembrete" data-id="${l.id}" title="Excluir lembrete" style="padding: 2px 6px;">✕</button>
     </div>
   `).join('') || '<div class="empty" style="padding: 28px 0;">Sem lembretes no momento.<br><span class="mu" style="font-size:12px;">Digite um recado rápido acima!</span></div>';
+
+  const barraProgressoHtml = `
+    <div class="drawer-progresso-card">
+      <div class="drawer-progresso-topo">
+        <div style="display:flex; align-items:center; gap:7px;">
+          <span style="font-size:14px;">📊</span>
+          <b class="drawer-progresso-titulo">Progresso de Lembretes</b>
+        </div>
+        <span class="drawer-progresso-pct ${pct === 100 ? 'done' : (pct > 0 ? 'progress' : '')}">
+          ${pct}%
+        </span>
+      </div>
+
+      <div class="drawer-progresso-track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progresso de Lembretes">
+        <div class="drawer-progresso-fill ${pct === 100 ? 'done' : ''}" style="width: ${pct}%;">
+          <span class="drawer-progresso-shine"></span>
+        </div>
+      </div>
+
+      <div class="drawer-progresso-sub">
+        <span><b>${concluidos}</b> de <b>${total}</b> concluído${total === 1 ? '' : 's'}</span>
+        ${total === 0 
+          ? '<span class="mu">Sem notas</span>' 
+          : (pct === 100 
+              ? '<span class="drawer-progresso-ok">Tudo concluído! 🎉</span>' 
+              : `<span class="drawer-progresso-pend">${pendentes} pendente${pendentes === 1 ? '' : 's'}</span>`
+            )
+        }
+      </div>
+    </div>
+  `;
 
   return `
     <button id="btnToggleDrawer" class="drawer-fab" data-act="toggle_drawer" title="Abrir Lembretes Rápidos (Alt + N)">
@@ -173,6 +262,8 @@ function renderDrawer() {
         <button class="b p" style="padding: 8px 14px; font-weight:bold;">＋</button>
       </form>
       <div class="mu" style="font-size:11.5px; margin: -2px 0 10px 2px;">Pressione Enter para adicionar rapidamente</div>
+
+      ${barraProgressoHtml}
 
       <div class="drawer-list">
         ${itensHtml}
@@ -214,11 +305,44 @@ function views() {
       return matchCorpus(corpus);
     });
     
-    let html = `<div class="fx" style="margin-bottom:10px"><button class="b p" data-act="limparBuscaGlobal">✕ Limpar busca global</button></div>`;
-    html += `<h3>Aulas encontradas (${resAulas.length})</h3>${resAulas.map(typeof aulaRow === 'function' ? aulaRow : (a => `<div class="row"><div class="t"><b>${esc(a.prof)} — ${esc(a.turma)}</b></div></div>`)).join('') || '<div class="empty">Nenhuma aula encontrada.</div>'}`;
-    html += `<h3>Manutenções e Reparos (${resReparos.length})</h3>${resReparos.map(r => `<div class="row"><div class="t"><b>${esc(r.local ? `[${r.local}] ` : '')}${esc(r.item)}</b><span class="mu">${esc(r.status)}</span></div></div>`).join('') || '<div class="empty">Nenhum chamado correspondente.</div>'}`;
-    html += `<h3>Cotações e Fornecedores (${resOrc.length})</h3>${resOrc.map(i => `<div class="row"><div class="t"><b>${esc(i.forn || i.nome)} — ${brl(itemTotal(i))}</b><span class="mu">${esc(S.orc.titulo || '')} • Status: ${i.status}</span></div></div>`).join('') || '<div class="empty">Nenhuma cotação encontrada.</div>'}`;
-    return card(`Resultados para: "${esc(buscaGlobalTermo)}"`, html);
+    const totalResultados = resAulas.length + resReparos.length + resOrc.length;
+
+    let filtroCategoriasHtml = `
+      <div class="search-category-filter-bar">
+        <button class="b ${buscaGlobalTipo === 'todos' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="todos">
+          Todos (${totalResultados})
+        </button>
+        <button class="b ${buscaGlobalTipo === 'aulas' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="aulas">
+          📚 Aulas (${resAulas.length})
+        </button>
+        <button class="b ${buscaGlobalTipo === 'operacional' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="operacional">
+          🛠️ Operacional (${resReparos.length})
+        </button>
+        <button class="b ${buscaGlobalTipo === 'orc' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="orc">
+          💰 Orçamento (${resOrc.length})
+        </button>
+        <button class="b" data-act="limparBuscaGlobal" style="margin-left:auto;">
+          ✕ Limpar busca
+        </button>
+      </div>
+    `;
+
+    let html = filtroCategoriasHtml;
+
+    if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'aulas') {
+      html += `<h3>📚 Aulas encontradas (${resAulas.length})</h3>${resAulas.map(typeof aulaRow === 'function' ? aulaRow : (a => `<div class="row"><div class="t"><b>${esc(a.prof)} — ${esc(a.turma)}</b></div></div>`)).join('') || '<div class="empty">Nenhuma aula encontrada para este filtro.</div>'}`;
+    }
+
+    if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'operacional') {
+      html += `<h3>🛠️ Manutenções e Reparos (${resReparos.length})</h3>${resReparos.map(r => `<div class="row"><div class="t"><b>${esc(r.local ? `[${r.local}] ` : '')}${esc(r.item)}</b><span class="mu">${esc(r.status)}</span></div></div>`).join('') || '<div class="empty">Nenhum chamado correspondente para este filtro.</div>'}`;
+    }
+
+    if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'orc') {
+      html += `<h3>💰 Cotações e Fornecedores (${resOrc.length})</h3>${resOrc.map(i => `<div class="row"><div class="t"><b>${esc(i.forn || i.nome)} — ${brl(itemTotal(i))}</b><span class="mu">${esc(S.orc.titulo || '')} • Status: ${i.status}</span></div></div>`).join('') || '<div class="empty">Nenhuma cotação encontrada para este filtro.</div>'}`;
+    }
+
+    const rotuloTipo = buscaGlobalTipo === 'aulas' ? 'Aulas' : (buscaGlobalTipo === 'operacional' ? 'Operacional' : (buscaGlobalTipo === 'orc' ? 'Orçamento' : 'Todas as Categorias'));
+    return card(`Resultados da busca: "${esc(buscaGlobalTermo)}" [${rotuloTipo}]`, html);
   }
 
   if (tab === 'hoje') {
@@ -433,7 +557,11 @@ function render() {
   
   navEl.innerHTML = 
     TABS.map(([k, n]) => `<button class="${k === tab && !buscaGlobalTermo ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('') +
-    `<button class="b ${tab === 'config' && !buscaGlobalTermo ? 'p' : ''}" data-act="abrir_config" style="margin-left:auto; display:inline-flex; align-items:center; gap:6px;">⚙️ Configurações</button>`;
+    `<button class="nav-config-btn ${tab === 'config' && !buscaGlobalTermo ? 'on' : ''}" data-act="abrir_config" title="Configurações do Sistema">
+      <span style="font-size:13px; line-height:1;">⚙️</span>
+      <span class="nav-config-full">Configurações</span>
+      <span class="nav-config-short">Config</span>
+    </button>`;
   
   vEl.innerHTML = views();
 
@@ -445,6 +573,24 @@ function render() {
   }
   if (drawerCont) {
     drawerCont.innerHTML = renderDrawer();
+  }
+
+  const selTipo = document.getElementById('filtroTipoGlobal');
+  if (selTipo && document.activeElement !== selTipo) {
+    if (buscaGlobalTermo.trim()) {
+      selTipo.value = buscaGlobalTipo || 'todos';
+    } else {
+      if (tab === 'aulas') selTipo.value = 'aulas';
+      else if (tab === 'semana') selTipo.value = 'operacional';
+      else if (tab === 'orc') selTipo.value = 'orc';
+      else if (tab === 'hoje') selTipo.value = 'todos';
+      else selTipo.value = buscaGlobalTipo || 'todos';
+    }
+  }
+
+  const btnLimpar = document.getElementById('btnLimparBuscaTop');
+  if (btnLimpar) {
+    btnLimpar.style.display = buscaGlobalTermo.trim() ? 'block' : 'none';
   }
   
   if (activeId) {
@@ -465,12 +611,18 @@ document.addEventListener('input', e => {
     novaTurmaManualNome = e.target.value;
     render();
   }
+  if (e.target.id === 'campoResumoEditavel') {
+    resumoTextoCustomizado = e.target.innerText;
+    return;
+  }
   if (e.target.id === 'buscaAulas') { 
     buscaAulas = e.target.value; 
     render(); 
   }
   if (e.target.id === 'buscaGlobal') { 
     buscaGlobalTermo = e.target.value; 
+    const btnLimpar = document.getElementById('btnLimparBuscaTop');
+    if (btnLimpar) btnLimpar.style.display = buscaGlobalTermo.trim() ? 'block' : 'none';
     render(); 
   }
   
@@ -584,6 +736,15 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Suporte a rolagem horizontal suave pelo mouse wheel na barra de navegação
+document.addEventListener('wheel', e => {
+  const nav = e.target.closest('nav#nav');
+  if (nav && nav.scrollWidth > nav.clientWidth && e.deltaY !== 0) {
+    e.preventDefault();
+    nav.scrollLeft += e.deltaY;
+  }
+}, { passive: false });
+
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-tab],[data-act]'); 
   if (!t) return; 
@@ -591,6 +752,10 @@ document.addEventListener('click', async e => {
   if (t.dataset.tab) { 
     tab = t.dataset.tab; 
     buscaGlobalTermo = ''; 
+    if (tab === 'aulas') buscaGlobalTipo = 'aulas';
+    else if (tab === 'semana') buscaGlobalTipo = 'operacional';
+    else if (tab === 'orc') buscaGlobalTipo = 'orc';
+    else buscaGlobalTipo = 'todos';
     const bg = document.getElementById('buscaGlobal'); 
     if (bg) bg.value = ''; 
     render(); 
@@ -598,6 +763,31 @@ document.addEventListener('click', async e => {
   }
   
   const a = t.dataset.act, id = t.dataset.id;
+
+  if (a === 'set_filtro_busca') {
+    buscaGlobalTipo = t.dataset.tipo || 'todos';
+    const sel = document.getElementById('filtroTipoGlobal');
+    if (sel) sel.value = buscaGlobalTipo;
+    render();
+    return;
+  }
+
+  if (a === 'toggle_tema') {
+    const atual = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const novo = atual === 'light' ? 'dark' : 'light';
+    if (typeof aplicarTema === 'function') aplicarTema(novo);
+    render();
+    toast(novo === 'light' ? '☀️ Modo Claro ativado' : '🌙 Modo Escuro ativado');
+    return;
+  }
+
+  if (a === 'set_tema') {
+    const novo = t.dataset.tema || 'dark';
+    if (typeof aplicarTema === 'function') aplicarTema(novo);
+    render();
+    toast(novo === 'light' ? '☀️ Modo Claro ativado' : '🌙 Modo Escuro ativado');
+    return;
+  }
 
   if (a === 'toggle_drawer') {
     drawerAberto = !drawerAberto;
@@ -691,6 +881,7 @@ document.addEventListener('click', async e => {
 
   if (a === 'copiar_resumo') {
     const tipo = t.dataset.tipo;
+    resumoTipoAtual = tipo;
     
     // Gerar planilha se for 3 ou 4 semanas
     if (tipo === '3' || tipo === '4') {
@@ -701,9 +892,33 @@ document.addEventListener('click', async e => {
 
     if (typeof gerarResumoOperacional === 'function') {
       const txt = gerarResumoOperacional(tipo);
+      resumoTextoCustomizado = txt;
+      const elResumo = document.getElementById('campoResumoEditavel');
+      if (elResumo) elResumo.innerText = txt;
       copy(txt);
       const rotulo = tipo === 'dia' ? 'do dia' : (tipo === '4' ? 'do mês' : `de ${tipo} semana(s)`);
-      toast(tipo === '3' || tipo === '4' ? 'Resumo copiado e Planilha descarregada!' : `Resumo ${rotulo} copiado!`);
+      toast(tipo === '3' || tipo === '4' ? 'Resumo carregado e copiado! Planilha descarregada.' : `Resumo ${rotulo} carregado e copiado!`);
+    }
+    render();
+    return;
+  }
+
+  if (a === 'copiar_resumo_editado') {
+    const elResumo = document.getElementById('campoResumoEditavel');
+    const txt = elResumo ? elResumo.innerText : (resumoTextoCustomizado || '');
+    copy(txt);
+    toast('Texto editado copiado para a área de transferência!');
+    return;
+  }
+
+  if (a === 'restaurar_resumo_original') {
+    if (typeof gerarResumoOperacional === 'function') {
+      const txt = gerarResumoOperacional(resumoTipoAtual || 'dia');
+      resumoTextoCustomizado = txt;
+      const elResumo = document.getElementById('campoResumoEditavel');
+      if (elResumo) elResumo.innerText = txt;
+      toast('Modelo original restaurado!');
+      render();
     }
     return;
   }
@@ -827,7 +1042,11 @@ document.addEventListener('click', async e => {
     buscaGlobalTermo = ''; 
     const el = document.getElementById('buscaGlobal'); 
     if (el) el.value = ''; 
+    const btnLimpar = document.getElementById('btnLimparBuscaTop');
+    if (btnLimpar) btnLimpar.style.display = 'none';
     render(); 
+    if (el) el.focus();
+    return;
   }
   if (a === 'limpar_busca_aulas') { 
     buscaAulas = ''; 
@@ -976,6 +1195,18 @@ document.addEventListener('click', async e => {
 
 document.addEventListener('change', async e => {
   const t = e.target, a = t.dataset.act;
+
+  if (t.id === 'filtroTipoGlobal') {
+    buscaGlobalTipo = t.value;
+    if (!buscaGlobalTermo.trim()) {
+      if (buscaGlobalTipo === 'aulas') tab = 'aulas';
+      else if (buscaGlobalTipo === 'operacional') tab = 'semana';
+      else if (buscaGlobalTipo === 'orc') tab = 'orc';
+      else if (buscaGlobalTipo === 'todos') tab = 'hoje';
+    }
+    render();
+    return;
+  }
   if (a === 'tog') { 
     const item = find(t.dataset.l, t.dataset.id); 
     if (item) { 

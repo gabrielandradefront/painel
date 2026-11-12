@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel Operacional Prius</title>
+  <meta name="description" content="Painel operacional e administrativo Prius para gestão de aulas, orçamento e operações.">
+  <meta property="og:title" content="Painel Operacional Prius">
+  <meta property="og:description" content="Painel operacional e administrativo Prius para gestão de aulas, orçamento e operações.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
+  <meta name="theme-color" content="#121316">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
@@ -12,7 +18,19 @@
   <main>
     <div class="top">
       <h1>Painel Prius</h1>
-      <input id="buscaGlobal" placeholder="Buscar em todo o painel..." style="width: 240px;">
+      <div class="top-search-group">
+        <select id="filtroTipoGlobal" class="top-filter-select" title="Filtrar por tipo" aria-label="Filtrar painel por tipo">
+          <option value="todos">Todos os tipos</option>
+          <option value="aulas">Aulas</option>
+          <option value="operacional">Operacional</option>
+          <option value="orc">Orçamento</option>
+        </select>
+        <div class="top-search-input-wrap">
+          <span class="top-search-icon">🔍</span>
+          <input id="buscaGlobal" placeholder="Buscar no painel..." autocomplete="off">
+          <button id="btnLimparBuscaTop" class="top-search-clear" title="Limpar busca" style="display:none;" data-act="limparBuscaGlobal">✕</button>
+        </div>
+      </div>
     </div>
     <nav id="nav"></nav>
     <div id="v"></div>
