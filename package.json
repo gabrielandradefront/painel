@@ -1,0 +1,16 @@
+{
+  "name": "painel-operacional-prius",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Painel operacional e administrativo Prius",
+  "scripts": {
+    "dev": "vite --port 3000 --host",
+    "build": "vite build",
+    "preview": "vite preview --port 3000 --host"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}
