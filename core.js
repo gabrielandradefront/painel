@@ -9,7 +9,7 @@ const KEY = 'prius-painel-v2';
 // CONFIGURAÇÃO DO SUPABASE (COLE SUAS CREDENCIAIS ABAIXO)
 // Encontre em: Supabase Dashboard > Project Settings > API
 // ========================================================
-const SUPABASE_URL = 'https://umkbdxwbagwnkgvsqcrb.supabase.co/rest/v1/';
+const SUPABASE_URL = 'https://umkbdxwbagwnkgvsqcrb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Dw2ug9P1PiLWUo0xvMjY1w_iiQ1Z7Uu';
 const SUPABASE_ROW_ID = 'prius-principal';
 
