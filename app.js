@@ -448,23 +448,23 @@ function views() {
             <b>${matsEnvioPendentes.length}</b>
             ${alertaVolume ? '<span class="pill w" style="font-size:10px; padding:1px 6px;">⚠️ 4+</span>' : ''}
           </div>
-          <span class="mu">próximo envio de materiais &rarr;</span>
+          <span class="mu stat-link-label"><span>próximo envio de materiais</span>${typeof icoSeta === 'function' ? icoSeta('right', 13) : '&rarr;'}</span>
         </div>
         <div class="stat" data-act="goto_tab" data-tab="aulas" data-sub="quadro" style="cursor: pointer;" title="Ver quadro geral de aulas">
           <b>${confPendentes.length}</b>
-          <span class="mu">confirmações pendentes &rarr;</span>
+          <span class="mu stat-link-label"><span>confirmações pendentes</span>${typeof icoSeta === 'function' ? icoSeta('right', 13) : '&rarr;'}</span>
         </div>
         <div class="stat" data-act="goto_tab" data-tab="semana" data-sub="reparos" style="cursor: pointer;" title="Ir para Manutenções">
           <b>${repPend.length}</b>
-          <span class="mu">reparos abertos &rarr;</span>
+          <span class="mu stat-link-label"><span>reparos abertos</span>${typeof icoSeta === 'function' ? icoSeta('right', 13) : '&rarr;'}</span>
         </div>
         <div class="stat" data-act="goto_tab" data-tab="orc" style="cursor: pointer;" title="Ir para Orçamento">
           <b>${orcAguardando.length}</b>
-          <span class="mu">orçamentos aguardando &rarr;</span>
+          <span class="mu stat-link-label"><span>orçamentos aguardando</span>${typeof icoSeta === 'function' ? icoSeta('right', 13) : '&rarr;'}</span>
         </div>
         <div class="stat" data-act="goto_tab" data-tab="semana" data-sub="docs" style="cursor: pointer;" title="Ir para Recibos Docentes">
           <b>${typeof docPend === 'function' ? docPend(G) : 0}</b>
-          <span class="mu">recibos pendentes &rarr;</span>
+          <span class="mu stat-link-label"><span>recibos pendentes</span>${typeof icoSeta === 'function' ? icoSeta('right', 13) : '&rarr;'}</span>
         </div>
       </div>
     `;
@@ -478,8 +478,9 @@ function views() {
     }
 
     const linkTitulo = (texto, tabDest, subDest) => `
-      <span data-act="goto_tab" data-tab="${tabDest}" ${subDest ? `data-sub="${subDest}"` : ''} style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-        ${texto} <span style="font-size:12px; color:var(--ac);">&rarr;</span>
+      <span class="title-arrow-link" data-act="goto_tab" data-tab="${tabDest}" ${subDest ? `data-sub="${subDest}"` : ''}>
+        <span>${texto}</span>
+        <span class="title-arrow-badge">${typeof icoSeta === 'function' ? icoSeta('right', 13) : '&rarr;'}</span>
       </span>
     `;
 
@@ -658,7 +659,48 @@ document.addEventListener('input', e => {
   if (e.target.id === 'cad_valorUnd') {
     e.target.dataset.manual = 'true';
   }
+  if (e.target.id === 'inpApNome' || e.target.id === 'inpApAlts') {
+    atualizarAvisoApelidoForm();
+  }
 });
+
+function atualizarAvisoApelidoForm() {
+  const box = document.getElementById('avisoApelidoForm');
+  const inpNome = document.getElementById('inpApNome');
+  const inpAlts = document.getElementById('inpApAlts');
+  if (!box || !inpNome || !inpAlts || typeof analisarApelido !== 'function') return;
+
+  const nomeVal = inpNome.value.trim();
+  const altsVal = inpAlts.value.trim();
+  if (!nomeVal && !altsVal) {
+    box.style.display = 'none';
+    box.textContent = '';
+    box.className = 'ap-form-aviso';
+    return;
+  }
+
+  const res = analisarApelido(nomeVal, altsVal.split(','));
+  if (!res || res.motivo === 'vazio' || res.motivo === 'criado') {
+    box.style.display = 'none';
+    box.textContent = '';
+    box.className = 'ap-form-aviso';
+    return;
+  }
+
+  if (res.motivo === 'mesclado') {
+    box.className = 'ap-form-aviso info';
+    box.textContent = `ℹ️ "${res.nome}" já está na lista — os novos apelidos serão mesclados ao cadastro existente.`;
+    box.style.display = 'block';
+  } else if (res.motivo === 'info_oficial') {
+    box.className = 'ap-form-aviso info';
+    box.textContent = res.msg;
+    box.style.display = 'block';
+  } else {
+    box.className = 'ap-form-aviso warn';
+    box.textContent = res.msg;
+    box.style.display = 'block';
+  }
+}
 
 // Gesto de deslizar (swipe) no Carrossel de Orçamentos
 let touchStartX = 0;
@@ -744,6 +786,10 @@ document.addEventListener('keydown', e => {
     }
   } else if (e.key === 'Escape' && drawerAberto) {
     drawerAberto = false;
+    render();
+  } else if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-act="toggle_apelidos_box"]')) {
+    e.preventDefault();
+    apelidosAberto = !apelidosAberto;
     render();
   }
 });
@@ -1204,8 +1250,45 @@ document.addEventListener('click', async e => {
   if (a === 'bkp_reverter') reverterSnapshot();
   if (a === 'crsub') { destPre = destPre === t.dataset.t ? '' : t.dataset.t; render(); if (destPre) toast('Envie o PDF novo acima'); }
   if (a === 'crdel') { confirmarExclusao(t, () => { S.aulas = S.aulas.filter(x => x.turma !== t.dataset.t); if (destPre === t.dataset.t) destPre = ''; save(); render(); toast('Cronograma apagado'); }); }
-  if (a === 'ap_unir') { if (typeof addApelido === 'function') addApelido(t.dataset.nome, [t.dataset.alt]); save(); render(); toast('Nomes unidos'); }
-  if (a === 'ap_todas') { if (typeof sugApelidos === 'function' && typeof addApelido === 'function') sugApelidos().forEach(s => addApelido(s.nome, [s.alt])); save(); render(); toast('Sugestões aplicadas'); }
+  if (a === 'toggle_apelidos_box') {
+    apelidosAberto = !apelidosAberto;
+    render();
+    return;
+  }
+  if (a === 'ap_unir') {
+    if (typeof addApelido === 'function') {
+      const res = addApelido(t.dataset.nome, [t.dataset.alt]);
+      if (res && res.ok) {
+        save();
+        render();
+        toast(res.msg || 'Nomes unidos');
+      } else if (res && res.msg) {
+        toast(res.msg);
+      }
+    }
+    return;
+  }
+  if (a === 'ap_todas') {
+    if (typeof sugApelidos === 'function' && typeof addApelido === 'function') {
+      const sugs = sugApelidos();
+      let aplicados = 0;
+      let ultimoAviso = '';
+      sugs.forEach(s => {
+        const res = addApelido(s.nome, [s.alt]);
+        if (res && res.ok) aplicados++;
+        else if (res && res.msg) ultimoAviso = res.msg;
+      });
+      if (aplicados > 0) {
+        save();
+        render();
+        toast(`✅ ${aplicados} sugestão(ões) aplicada(s)!`);
+      } else {
+        render();
+        toast(ultimoAviso || 'ℹ️ Nenhuma nova sugestão para aplicar.');
+      }
+    }
+    return;
+  }
   if (a === 'del_apelido') confirmarExclusao(t, () => { S.apelidos = S.apelidos.filter(x => x.id !== t.dataset.id); save(); render(); toast('Desfeito'); });
 });
 
@@ -1366,7 +1449,16 @@ document.addEventListener('submit', e => {
 
   if (f === 'apelido') {
     e.stopImmediatePropagation();
-    if (typeof addApelido === 'function' && addApelido(d.nome, String(d.alts || '').split(','))) { save(); render(); toast('Nomes unidos'); } else toast('Informe o nome e pelo menos um outro nome');
+    if (typeof addApelido === 'function') {
+      const res = addApelido(d.nome, String(d.alts || '').split(','));
+      if (res && res.ok) {
+        save();
+        render();
+        toast(res.msg || 'Nomes unidos');
+      } else {
+        toast((res && res.msg) || 'Informe o nome e pelo menos um outro nome');
+      }
+    }
     return;
   }
 

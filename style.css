@@ -1554,3 +1554,319 @@ b[id^="ot-"], .stat b, .drawer-item-text .time {
   border-color: var(--ac) !important;
   box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.22) !important;
 }
+
+/* ========================================================
+   PAINEL RETRÁTIL (ACCORDION) & VALIDAÇÃO DE APELIDOS
+======================================================== */
+.accordion-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.16s ease;
+}
+
+.accordion-header:hover {
+  background: var(--card-sub);
+}
+
+.accordion-header:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: -2px;
+}
+
+.accordion-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.accordion-header h2 {
+  margin: 0;
+}
+
+.accordion-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--mu);
+  background: var(--card-sub);
+  border: 1px solid var(--bd);
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.accordion-header:hover .accordion-arrow {
+  color: var(--ac);
+  border-color: var(--ac);
+  background: var(--ac-light);
+}
+
+.accordion-card.open .accordion-arrow {
+  color: var(--ac);
+  border-color: rgba(245, 158, 11, 0.38);
+  background: var(--ac-light);
+}
+
+.accordion-card.open .accordion-arrow .ico-seta {
+  transform: rotate(180deg);
+}
+
+.accordion-body {
+  display: none;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--bd);
+}
+
+.accordion-body.open {
+  display: block;
+}
+
+.ap-form-aviso {
+  margin: -2px 0 12px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.ap-form-aviso.info {
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.ap-form-aviso.warn {
+  background: var(--wr-light);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+/* ========================================================
+   DESIGN APRIMORADO DE SETAS E CONTROLES DE NAVEGAÇÃO
+======================================================== */
+.ico-seta {
+  display: block;
+  flex-shrink: 0;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), color 0.16s ease;
+}
+
+/* Grupo de setas do carrossel (Orçamento) */
+.slide-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--card-sub);
+  border: 1px solid var(--bd);
+}
+
+button.b.arrow-icon-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: var(--tx);
+}
+
+button.b.arrow-icon-btn:hover:not(:disabled) {
+  background: var(--ac-light);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: var(--ac);
+}
+
+button.b.arrow-icon-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+  background: transparent;
+  border-color: transparent;
+  color: var(--mu);
+}
+
+button.b.arrow-icon-btn.nav-prev:hover:not(:disabled) .ico-seta,
+button.b.nav-arrow-btn.nav-prev:hover:not(:disabled) .ico-seta {
+  transform: translateX(-2px);
+}
+
+button.b.arrow-icon-btn.nav-next:hover:not(:disabled) .ico-seta,
+button.b.nav-arrow-btn.nav-next:hover:not(:disabled) .ico-seta {
+  transform: translateX(2px);
+}
+
+.slide-nav-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mu);
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* Barra de navegação semanal (Operações) */
+.week-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.week-nav-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--tx);
+}
+
+button.b.nav-arrow-btn {
+  padding: 7px 12px;
+  border-radius: 9px;
+  gap: 6px;
+}
+
+/* Setas de atalho no Cockpit (Hoje) e Sugestões */
+.stat-link-label {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.stat-link-label .ico-seta {
+  color: var(--mu);
+  opacity: 0.75;
+}
+
+.stat:hover .stat-link-label .ico-seta {
+  color: var(--ac);
+  opacity: 1;
+  transform: translateX(3px);
+}
+
+.title-arrow-link {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-arrow-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--ac-light);
+  color: var(--ac);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.title-arrow-link:hover .title-arrow-badge {
+  background: var(--ac);
+  color: #121316;
+  border-color: var(--ac);
+  transform: translateX(2px);
+}
+
+.sug-pair {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.sug-arrow {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  color: var(--ac);
+}
+
+:root[data-theme="light"] .accordion-header:hover {
+  background: #f8fafc;
+}
+
+:root[data-theme="light"] .accordion-arrow {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+:root[data-theme="light"] .accordion-card.open .accordion-arrow {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #b45309;
+}
+
+:root[data-theme="light"] .slide-nav-group {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+:root[data-theme="light"] button.b.arrow-icon-btn {
+  background: #ffffff;
+  color: #0b0f19;
+  border-color: #e2e8f0;
+}
+
+:root[data-theme="light"] button.b.arrow-icon-btn:hover:not(:disabled) {
+  background: #fffbeb;
+  border-color: var(--ac);
+  color: var(--ac-hover);
+}
+
+:root[data-theme="light"] button.b.arrow-icon-btn:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: #94a3b8;
+}
+
+:root[data-theme="light"] .title-arrow-badge {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fcd34d;
+}
+
+:root[data-theme="light"] .title-arrow-link:hover .title-arrow-badge {
+  background: #d97706;
+  color: #ffffff;
+  border-color: #d97706;
+}
+
+:root[data-theme="light"] .ap-form-aviso.info {
+  background: #eff6ff;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+:root[data-theme="light"] .ap-form-aviso.warn {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}

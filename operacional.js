@@ -149,22 +149,130 @@ function unirDocs(canon, alts) {
   });
 }
 
+function analisarApelido(nome, alts) {
+  const nomeLimpo = (nome || '').trim();
+  const listaBruta = Array.isArray(alts) ? alts : String(alts || '').split(',');
+  const vistos = new Set();
+  const altsLimpos = [];
+
+  for (const bruto of listaBruta) {
+    const a = String(bruto || '').trim();
+    const na = norm(a);
+    if (!a || na === norm(nomeLimpo) || vistos.has(na)) continue;
+    vistos.add(na);
+    altsLimpos.push(a);
+  }
+
+  const lista = S.apelidos || [];
+  const nNome = norm(nomeLimpo);
+  const oficialExistente = nNome ? lista.find(x => norm(x.nome) === nNome) : null;
+  const nomeComoApelido = nNome ? lista.find(x => (x.alts || []).some(a => norm(a) === nNome)) : null;
+
+  if (nomeComoApelido) {
+    return {
+      ok: false,
+      motivo: 'conflito_nome',
+      msg: `⚠️ "${nomeLimpo}" já está vinculado como apelido de "${nomeComoApelido.nome}". Desfaça o vínculo anterior primeiro.`
+    };
+  }
+
+  for (const alt of altsLimpos) {
+    const nAlt = norm(alt);
+    const outroOficial = lista.find(x => x !== oficialExistente && norm(x.nome) === nAlt);
+    if (outroOficial) {
+      return {
+        ok: false,
+        motivo: 'conflito_alt',
+        msg: `⚠️ O apelido "${alt}" já está cadastrado como professor oficial ("${outroOficial.nome}"). Desfaça o vínculo anterior primeiro.`
+      };
+    }
+    const outroVinculo = lista.find(x => x !== oficialExistente && (x.alts || []).some(a => norm(a) === nAlt));
+    if (outroVinculo) {
+      return {
+        ok: false,
+        motivo: 'conflito_alt',
+        msg: `⚠️ O apelido "${alt}" já está vinculado a "${outroVinculo.nome}". Desfaça o vínculo anterior primeiro.`
+      };
+    }
+  }
+
+  if (!nomeLimpo || !altsLimpos.length) {
+    if (oficialExistente && nomeLimpo && !altsLimpos.length) {
+      return {
+        ok: false,
+        motivo: 'info_oficial',
+        existente: oficialExistente,
+        msg: `ℹ️ "${oficialExistente.nome}" já está na lista (${(oficialExistente.alts || []).length} apelido(s)). Informe novos apelidos para mesclar.`
+      };
+    }
+    return {
+      ok: false,
+      motivo: 'vazio',
+      msg: '⚠️ Informe o nome oficial e pelo menos um outro nome diferente.'
+    };
+  }
+
+  if (oficialExistente) {
+    const novosAlts = altsLimpos.filter(a => !(oficialExistente.alts || []).some(y => norm(y) === norm(a)));
+    if (!novosAlts.length) {
+      return {
+        ok: false,
+        motivo: 'duplicado',
+        msg: '⚠️ Este nome e apelido(s) já estão cadastrados!'
+      };
+    }
+    return {
+      ok: true,
+      motivo: 'mesclado',
+      existente: oficialExistente,
+      nome: oficialExistente.nome,
+      novosAlts
+    };
+  }
+
+  return {
+    ok: true,
+    motivo: 'criado',
+    nome: nomeLimpo,
+    novosAlts: altsLimpos
+  };
+}
+
 function addApelido(nome, alts) {
-  nome = (nome || '').trim(); alts = alts.map(x => x.trim()).filter(x => x && norm(x) !== norm(nome));
-  if (!nome || !alts.length) return false;
   S.apelidos = S.apelidos || [];
-  let e = S.apelidos.find(x => norm(x.nome) === norm(nome));
-  if (!e) { const o = S.apelidos.find(x => (x.alts || []).some(a => norm(a) === norm(nome))); if (o) e = o; }
-  if (!e) { e = { id: uid(), nome, alts: [] }; S.apelidos.push(e); }
-  const entra = a => { if (norm(a) !== norm(e.nome) && !e.alts.some(y => norm(y) === norm(a))) e.alts.push(a); };
-  alts.forEach(entra);
-  S.apelidos = S.apelidos.filter(x => {
-    if (x === e) return true;
-    if (alts.some(a => norm(a) === norm(x.nome))) { entra(x.nome); (x.alts || []).forEach(entra); return false; }
-    return true;
+  const analise = analisarApelido(nome, alts);
+  if (!analise.ok) return analise;
+
+  let entry = analise.existente;
+  if (!entry) {
+    entry = { id: uid(), nome: analise.nome, alts: [] };
+    S.apelidos.push(entry);
+  }
+
+  analise.novosAlts.forEach(a => {
+    if (norm(a) !== norm(entry.nome) && !entry.alts.some(y => norm(y) === norm(a))) {
+      entry.alts.push(a);
+    }
   });
-  unirDocs(e.nome, e.alts);
-  return true;
+  entry.alts.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+
+  unirDocs(entry.nome, entry.alts);
+
+  if (analise.motivo === 'mesclado') {
+    return {
+      ok: true,
+      motivo: 'mesclado',
+      nome: entry.nome,
+      msg: `ℹ️ "${entry.nome}" já estava na lista — novos apelidos foram mesclados!`
+    };
+  }
+
+  return {
+    ok: true,
+    motivo: 'criado',
+    nome: entry.nome,
+    msg: `✅ Nomes unidos para "${entry.nome}"!`
+  };
 }
 
 const nomesProf = () => [...new Set(S.aulas.map(a => (a.prof || '').trim()).filter(Boolean))];
@@ -177,16 +285,84 @@ function sugApelidos() {
     const cands = [...new Set(nomes.filter(o => { const t = norm(o).split(/\s+/); return t.length > 1 && t[0] === t1[0]; }).map(profCanon))];
     if (cands.length === 1) out.push({ alt: c, nome: cands[0] });
   });
-  return out;
+  return out.sort((a, b) =>
+    a.alt.localeCompare(b.alt, 'pt-BR', { sensitivity: 'base' }) ||
+    a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })
+  );
 }
 
 function cardApelidos() {
-  const sug = sugApelidos(), ap = S.apelidos || [], nomes = nomesProf().sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const sug = sugApelidos();
+  const ap = S.apelidos || [];
+  const apOrd = [...ap].sort((a, b) =>
+    (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
+  );
+  const nomes = [...new Set([...nomesProf(), ...ap.map(e => (e.nome || '').trim()).filter(Boolean)])]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+
+  const mapaOficiais = new Map(ap.map(e => [norm(e.nome), e]));
+  const mapaAlts = new Map();
+  ap.forEach(e => (e.alts || []).forEach(alt => mapaAlts.set(norm(alt), e)));
+
+  const optionsDatalist = nomes.map(n => {
+    const nn = norm(n);
+    if (mapaOficiais.has(nn)) {
+      return `<option value="${esc(n)}" label="${esc(n)} (já unido)"></option>`;
+    }
+    if (mapaAlts.has(nn)) {
+      const dono = mapaAlts.get(nn);
+      return `<option value="${esc(n)}" label="${esc(n)} (apelido de ${esc(dono.nome)})"></option>`;
+    }
+    return `<option value="${esc(n)}"></option>`;
+  }).join('');
+
+  const aberto = typeof apelidosAberto !== 'undefined' ? apelidosAberto : false;
+
   let h = `<div class="mu" style="margin-bottom:8px">Una os nomes diferentes de um mesmo professor (ex.: “Hugo” e “Hugo Lemos”) para que entrem num só contrato e num só recibo por dia.</div>`;
-  if (sug.length) h += `<h3>Sugestões</h3>` + sug.map(s => `<div class="row"><div class="t"><b>${esc(s.alt)} → ${esc(s.nome)}</b></div><button class="b p" data-act="ap_unir" data-alt="${esc(s.alt)}" data-nome="${esc(s.nome)}">Unir</button></div>`).join('') + (sug.length > 1 ? `<div class="fx" style="margin-top:8px"><button class="b" data-act="ap_todas">Unir todas as sugestões</button></div>` : '');
-  h += `<h3>Unir manualmente</h3><datalist id="profsL">${nomes.map(n => `<option value="${esc(n)}">`).join('')}</datalist><form data-form="apelido"><input name="nome" list="profsL" placeholder="Nome que vale (oficial)" required style="flex:2 1 200px"><input name="alts" placeholder="Outros nomes, separados por vírgula" required style="flex:2 1 200px"><button class="b p">Unir</button></form>`;
-  if (ap.length) h += `<h3>Nomes unidos</h3>` + ap.map(e => `<div class="row"><div class="t"><b>${esc(e.nome)}</b><span class="mu">também aparece como: ${e.alts.map(esc).join(', ')}</span></div><button class="b" data-act="del_apelido" data-id="${e.id}">Desfazer</button></div>`).join('');
-  return card('👥 Gestão de Professores (Apelidos)', h);
+
+  if (sug.length) {
+    h += `<h3>Sugestões (${sug.length})</h3>` +
+      sug.map(s => `<div class="row"><div class="t"><b class="sug-pair">${esc(s.alt)} <span class="sug-arrow">${icoSeta('arrow-right', 14)}</span> ${esc(s.nome)}</b></div><button class="b p" data-act="ap_unir" data-alt="${esc(s.alt)}" data-nome="${esc(s.nome)}">Unir</button></div>`).join('') +
+      (sug.length > 1 ? `<div class="fx" style="margin-top:8px"><button class="b" data-act="ap_todas">Unir todas as sugestões</button></div>` : '');
+  }
+
+  h += `
+    <h3>Unir manualmente</h3>
+    <datalist id="profsL">${optionsDatalist}</datalist>
+    <form data-form="apelido" id="formApelido">
+      <input name="nome" id="inpApNome" list="profsL" placeholder="Nome que vale (oficial)" required autocomplete="off" style="flex:2 1 200px">
+      <input name="alts" id="inpApAlts" placeholder="Outros nomes, separados por vírgula" required autocomplete="off" style="flex:2 1 200px">
+      <button class="b p">Unir</button>
+    </form>
+    <div id="avisoApelidoForm" class="ap-form-aviso" style="display:none;"></div>
+  `;
+
+  if (apOrd.length) {
+    h += `<h3>Nomes unidos (${apOrd.length})</h3>` + apOrd.map(e => {
+      const altsOrd = [...(e.alts || [])].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+      return `<div class="row"><div class="t"><b>${esc(e.nome)}</b><span class="mu">também aparece como: ${altsOrd.map(esc).join(', ')}</span></div><button class="b" data-act="del_apelido" data-id="${e.id}">Desfazer</button></div>`;
+    }).join('');
+  }
+
+  const badgeSug = sug.length
+    ? `<span class="pill w" title="${sug.length} sugestão(ões) encontrada(s)">${sug.length} sugest${sug.length > 1 ? 'ões' : 'ão'}</span>`
+    : '';
+
+  return `
+    <div class="card accordion-card ${aberto ? 'open' : ''}">
+      <div class="accordion-header" data-act="toggle_apelidos_box" role="button" tabindex="0" aria-expanded="${aberto ? 'true' : 'false'}">
+        <div class="accordion-title-wrap">
+          <h2>👥 Gestão de Professores (Apelidos)</h2>
+          <span class="pill ${apOrd.length > 0 ? 'o' : ''}">${apOrd.length} cadastrado(s)</span>
+          ${badgeSug}
+        </div>
+        <span class="accordion-arrow" aria-hidden="true">${typeof icoSeta === 'function' ? icoSeta('down', 16) : (aberto ? '▲' : '▼')}</span>
+      </div>
+      <div class="accordion-body ${aberto ? 'open' : ''}">
+        ${h}
+      </div>
+    </div>
+  `;
 }
 
 // --- RENDERIZADOR DA ABA OPERAÇÕES ---
@@ -906,10 +1082,19 @@ function viewOperacional() {
   });
 
   let wkHtml = `
-    <div class="row" style="border:0;justify-content:space-between;">
-      <button class="b" data-act="wk" data-d="-1">&larr; Semana anterior</button>
-      <b>${br(a)} a ${br(b)}${wk === 0 ? ' (semana atual)' : ''}</b>
-      <button class="b" data-act="wk" data-d="1">Próxima semana &rarr;</button>
+    <div class="week-nav-bar">
+      <button class="b nav-arrow-btn nav-prev" data-act="wk" data-d="-1" title="Semana anterior">
+        ${typeof icoSeta === 'function' ? icoSeta('left', 15) : '&larr;'}
+        <span>Semana anterior</span>
+      </button>
+      <div class="week-nav-label">
+        <b>${br(a)} a ${br(b)}</b>
+        ${wk === 0 ? '<span class="pill b" style="font-size:10.5px; padding:2px 8px;">Semana atual</span>' : ''}
+      </div>
+      <button class="b nav-arrow-btn nav-next" data-act="wk" data-d="1" title="Próxima semana">
+        <span>Próxima semana</span>
+        ${typeof icoSeta === 'function' ? icoSeta('right', 15) : '&rarr;'}
+      </button>
     </div>
   `;
 

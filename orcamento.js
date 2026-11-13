@@ -618,10 +618,14 @@ function viewOrc() {
         <button class="b ${orcSlideAtivo === 0 ? 'p' : ''}" data-act="orc_ir_slide" data-s="0">📋 Tabela de Cotação</button>
         <button class="b ${orcSlideAtivo === 1 ? 'p' : ''}" data-act="orc_ir_slide" data-s="1">📈 Comparativo & Histórico</button>
       </div>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <button class="b" data-act="orc_passar_slide" data-dir="-1" ${orcSlideAtivo === 0 ? 'disabled style="opacity:0.35;cursor:not-allowed;"' : ''} title="Ecrã anterior (Slide 1)">◀</button>
-        <span class="mu" style="font-size:12px; font-weight:600; padding:0 4px;">${orcSlideAtivo + 1} / 2</span>
-        <button class="b" data-act="orc_passar_slide" data-dir="1" ${orcSlideAtivo === 1 ? 'disabled style="opacity:0.35;cursor:not-allowed;"' : ''} title="Próximo ecrã (Slide 2)">▶</button>
+      <div class="slide-nav-group">
+        <button class="b arrow-icon-btn nav-prev" data-act="orc_passar_slide" data-dir="-1" ${orcSlideAtivo === 0 ? 'disabled' : ''} title="Tela anterior (Slide 1)" aria-label="Slide anterior">
+          ${typeof icoSeta === 'function' ? icoSeta('left', 16) : '◀'}
+        </button>
+        <span class="slide-nav-count">${orcSlideAtivo + 1} / 2</span>
+        <button class="b arrow-icon-btn nav-next" data-act="orc_passar_slide" data-dir="1" ${orcSlideAtivo === 1 ? 'disabled' : ''} title="Próxima tela (Slide 2)" aria-label="Próximo slide">
+          ${typeof icoSeta === 'function' ? icoSeta('right', 16) : '▶'}
+        </button>
       </div>
     </div>
   `;
@@ -788,10 +792,10 @@ function viewOrc() {
       if (ultimoMenor !== null && ultimoMenor > 0 && menor > 0) {
         const diff = Math.round(((menor - ultimoMenor) / ultimoMenor) * 100);
         if (diff > 0) {
-          varStr = `▲ +${diff}%`;
+          varStr = `${typeof icoSeta === 'function' ? icoSeta('trend-up', 12) : '▲'} +${diff}%`;
           pillClass = 'e';
         } else if (diff < 0) {
-          varStr = `▼ ${diff}%`;
+          varStr = `${typeof icoSeta === 'function' ? icoSeta('trend-down', 12) : '▼'} ${diff}%`;
           pillClass = 'o';
         } else {
           varStr = '= 0%';

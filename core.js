@@ -311,6 +311,20 @@ const wd = d => {
 const norm = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const find = (l, id) => (S[l] || []).find(x => x.id === id);
 
+function icoSeta(tipo, size = 15) {
+  const paths = {
+    down: '<polyline points="6 9 12 15 18 9"></polyline>',
+    up: '<polyline points="18 15 12 9 6 15"></polyline>',
+    left: '<polyline points="15 18 9 12 15 6"></polyline>',
+    right: '<polyline points="9 18 15 12 9 6"></polyline>',
+    'arrow-left': '<line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline>',
+    'arrow-right': '<line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>',
+    'trend-up': '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline>',
+    'trend-down': '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline>'
+  };
+  return `<svg class="ico-seta ico-${tipo}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[tipo] || paths.right}</svg>`;
+}
+
 // Cálculo do consumo do localStorage
 function getStorageUsage() {
   let bytes = 0;
@@ -348,6 +362,7 @@ let prodFiltroHist = '';
 let modoEntradaCronograma = 'pdf'; // 'pdf', 'texto', 'novo'
 let novaTurmaManualNome = '';
 let drawerAberto = false;
+let apelidosAberto = false;
 let resumoTextoCustomizado = null;
 let resumoTipoAtual = 'dia';
 
