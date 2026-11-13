@@ -118,11 +118,15 @@ function viewConfig() {
     </div>
   `;
 
-  const st = getStorageUsage();
   const totalAulas = S.aulas.length;
   const passadas = S.aulas.filter(a => a.dia < hoje).length;
   const reparosConcluidos = S.reparos.filter(r => r.status === 'Concluído').length;
   const orcHistQtd = (S.orcHist || []).length;
+
+  const isSupaConfig = typeof supabaseConfigurado === 'function' && supabaseConfigurado();
+  const isSupaAtivo = isSupaConfig && typeof sbClient !== 'undefined' && !!sbClient && (typeof sbConectado === 'undefined' || sbConectado);
+  const ultSync = S.meta && S.meta.ultimoSyncNuvem ? new Date(S.meta.ultimoSyncNuvem).toLocaleString('pt-BR') : 'Ainda não sincronizado';
+  const temPendLocal = typeof sbPendenciasLocais !== 'undefined' && sbPendenciasLocais;
 
   const ultBackup = S.meta && S.meta.ultimoBackup ? new Date(S.meta.ultimoBackup).toLocaleString('pt-BR') : 'Sem registo recente';
   const ultRest = S.meta && S.meta.ultimaRestauracao ? new Date(S.meta.ultimaRestauracao).toLocaleString('pt-BR') : 'Sem restauração recente';
@@ -130,25 +134,36 @@ function viewConfig() {
   let snapTxt = ''; 
   if (snapRaw) { try { snapTxt = new Date(JSON.parse(snapRaw).data).toLocaleString('pt-BR'); } catch (e) {} }
 
-  let storageHtml = `
+  let nuvemHtml = `
     <div style="margin-bottom: 14px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-        <b>Espaço Consumido no Navegador</b>
-        <span class="pill ${st.pct > 75 ? 'e' : (st.pct > 40 ? 'w' : 'o')}" style="font-size:12px; padding:3px 10px;">
-          ${st.kb} KB de ~${st.maxKb} KB (${st.pct}%)
-        </span>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <b>Status da Conexão:</b>
+          <span class="pill ${isSupaAtivo ? 'o' : 'w'}" style="font-size:12px; padding:3px 10px;">
+            ${isSupaAtivo ? '☁️ Conectado ao Supabase' : '⚠️ Modo Offline'}
+          </span>
+          ${temPendLocal ? '<span class="pill b" style="font-size:11px; padding:2px 8px;">Alterações locais pendentes</span>' : ''}
+        </div>
+        <button class="b p" data-act="forcar_sync_nuvem" title="Forçar sincronização imediata com o banco na nuvem">
+          🔄 Sincronizar Agora
+        </button>
       </div>
-      <div style="width:100%; height:10px; background:var(--bd); border-radius:999px; overflow:hidden;">
-        <div style="width:${Math.max(1, st.pct)}%; height:100%; background: ${st.pct > 75 ? 'var(--er)' : (st.pct > 40 ? 'var(--wr)' : 'var(--ac)')}; transition:width 0.3s ease;"></div>
-      </div>
-      <div class="mu" style="font-size:12.5px; margin-top:8px;">
-        Total armazenado: <b>${totalAulas}</b> aulas (${passadas} passadas), <b>${S.reparos.length}</b> manutenções (${reparosConcluidos} concluídas) e <b>${orcHistQtd}</b> cotações arquivadas.
+
+      <div class="grid" style="margin-bottom:10px;">
+        <div class="stat">
+          <b style="font-size:14px; color:var(--tx);">${ultSync}</b>
+          <span class="mu">Última sincronização na nuvem</span>
+        </div>
+        <div class="stat">
+          <b style="font-size:14px; color:var(--tx);">${totalAulas} aulas • ${S.reparos.length} manutenções</b>
+          <span class="mu">${passadas} passadas • ${reparosConcluidos} concluídas • ${orcHistQtd} cotações</span>
+        </div>
       </div>
     </div>
 
     <h3 style="margin-top:16px;">Opções Seguras de Limpeza</h3>
     <div class="mu" style="margin-bottom:10px; font-size:12.5px;">
-      Libere espaço removendo apenas registros antigos sem afetar as aulas futuras ou o funcionamento do painel:
+      Remova apenas registros antigos já encerrados sem afetar as aulas futuras ou o banco compartilhado:
     </div>
 
     <div class="fx" style="gap:8px;">
@@ -160,9 +175,6 @@ function viewConfig() {
       </button>
       <button class="b" data-act="limpar_orchist" ${orcHistQtd === 0 ? 'disabled' : ''} title="Remove histórico de orçamentos antigos">
         🧹 Limpar Cotações Arquivadas (${orcHistQtd})
-      </button>
-      <button class="b danger" data-act="reset_seguro_total" title="Baixa um backup preventivo no ato antes de redefinir">
-        ⚠️ Redefinição Total (com Backup Automático)
       </button>
     </div>
   `;
@@ -183,7 +195,7 @@ function viewConfig() {
   }
 
   return card('🎨 Aparência & Tema do Painel', temaHtml) +
-         card('📊 Consumo de Memória & Limpeza Segura', storageHtml) + 
+         card('☁️ Status da Nuvem & Manutenção de Dados', nuvemHtml) + 
          card('💾 Backup e Restauração de Dados', backupHtml) + 
          (typeof cardApelidos === 'function' ? cardApelidos() : '');
 }
@@ -1097,31 +1109,30 @@ document.addEventListener('click', async e => {
     });
   }
 
-  if (a === 'reset_seguro_total') {
-    confirmarExclusao(t, async () => {
-      toast('Gerando e baixando backup preventivo...');
-      await baixarBackup('backup-preventivo-antes-do-reset');
-      
-      localStorage.setItem(KEY + '-snapshot-emergencia', JSON.stringify({ data: new Date().toISOString(), dados: JSON.parse(JSON.stringify(S)) }));
-      
-      S = {
-        aulas: [],
-        reparos: [],
-        hist: [],
-        orcHist: [],
-        fornecedores: [],
-        apelidos: [],
-        filaMateriais: [],
-        lembretes: [],
-        docs: {},
-        cat: {},
-        meta: { ultimoReset: new Date().toISOString() },
-        orc: { inst: 'Prius', titulo: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] }
-      };
-      save();
+  if (a === 'forcar_sync_nuvem') {
+    const supaOk = typeof supabaseConfigurado === 'function' && supabaseConfigurado();
+    if (!supaOk) {
+      toast('⚠️ Supabase não configurado. Modo offline ativo.');
       render();
-      alert('Memória redefinida com sucesso!\nUm arquivo de backup preventivo foi baixado no seu computador caso precise restaurar.');
-    });
+      return;
+    }
+
+    toast('🔄 Sincronizando com o Supabase...');
+    let ok = false;
+    if (typeof sbPendenciasLocais !== 'undefined' && sbPendenciasLocais && typeof enviarEstadoParaNuvem === 'function') {
+      if (typeof sbSyncTimer !== 'undefined') clearTimeout(sbSyncTimer);
+      ok = await enviarEstadoParaNuvem();
+    } else if (typeof iniciarSupabase === 'function') {
+      ok = await iniciarSupabase();
+    }
+
+    render();
+    if (ok) {
+      toast('☁️ Painel sincronizado com sucesso!');
+    } else {
+      toast('⚠️ Não foi possível sincronizar. Modo offline ativo.');
+    }
+    return;
   }
 
   if (a === 'del_fila') { S.filaMateriais.splice(+t.dataset.i, 1); save(); render(); toast('Removido da fila'); }

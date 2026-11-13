@@ -136,8 +136,11 @@ try {
 // MOTOR DE SINCRONIZAÇÃO COM SUPABASE (NUVEM + REALTIME)
 // ========================================================
 let sbClient = null;
+let sbChannel = null;
 let sbSyncTimer = null;
 let sbUltimaAtualizacaoLocal = 0;
+let sbConectado = false;
+let sbPendenciasLocais = false;
 
 const supabaseConfigurado = () =>
   typeof window !== 'undefined' &&
@@ -148,7 +151,8 @@ const supabaseConfigurado = () =>
   !SUPABASE_ANON_KEY.includes('COLE_SUA');
 
 async function enviarEstadoParaNuvem() {
-  if (!sbClient) return;
+  if (!supabaseConfigurado()) return false;
+  if (!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   try {
     const agoraIso = new Date().toISOString();
     S.meta = S.meta || {};
@@ -164,27 +168,42 @@ async function enviarEstadoParaNuvem() {
       }, { onConflict: 'id' });
 
     if (error) {
+      sbConectado = false;
       console.error('Erro ao sincronizar com Supabase:', error.message);
       toast('⚠️ Falha ao salvar na nuvem (dados mantidos localmente).');
+      return false;
     }
+
+    sbConectado = true;
+    sbPendenciasLocais = false;
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+    return true;
   } catch (err) {
+    sbConectado = false;
     console.error('Exceção ao enviar para Supabase:', err);
+    return false;
   }
 }
 
 function agendarSyncNuvem() {
-  if (!sbClient) return;
+  if (!sbClient && !supabaseConfigurado()) return;
   clearTimeout(sbSyncTimer);
-  sbSyncTimer = setTimeout(() => {
-    enviarEstadoParaNuvem();
+  sbSyncTimer = setTimeout(async () => {
+    await enviarEstadoParaNuvem();
+    if (typeof render === 'function' && tab === 'config') render();
   }, 600);
 }
 
 async function iniciarSupabase() {
-  if (!supabaseConfigurado()) return;
+  if (!supabaseConfigurado()) {
+    sbConectado = false;
+    return false;
+  }
 
   try {
-    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (!sbClient) {
+      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
 
     // 1. Busca o estado mais recente da nuvem ao abrir o painel
     const { data, error } = await sbClient
@@ -194,10 +213,14 @@ async function iniciarSupabase() {
       .maybeSingle();
 
     if (error) {
+      sbConectado = false;
       console.error('Erro ao carregar dados do Supabase:', error.message);
       toast('⚠️ Modo offline ativo (erro ao conectar à nuvem).');
-      return;
+      if (typeof render === 'function') render();
+      return false;
     }
+
+    sbConectado = true;
 
     const nuvemTemDados = data && data.dados && Object.keys(data.dados).length > 0 &&
       ((data.dados.aulas && data.dados.aulas.length > 0) ||
@@ -212,40 +235,58 @@ async function iniciarSupabase() {
     if (nuvemTemDados) {
       // A nuvem já possui dados: aplica no painel e atualiza o cache local
       S = normalizarEstado(data.dados);
+      S.meta = S.meta || {};
+      S.meta.ultimoSyncNuvem = S.meta.ultimoSyncNuvem || data.atualizado_em || new Date().toISOString();
+      sbPendenciasLocais = false;
       localStorage.setItem(KEY, JSON.stringify(S));
       if (typeof render === 'function') render();
       toast('☁️ Painel sincronizado com a nuvem!');
     } else if (localTemDados) {
       // Primeira migração: banco na nuvem vazio, mas este navegador já tem dados -> sobe automaticamente
       await enviarEstadoParaNuvem();
+      if (typeof render === 'function') render();
       toast('☁️ Dados locais enviados para o Supabase com sucesso!');
+    } else {
+      S.meta = S.meta || {};
+      S.meta.ultimoSyncNuvem = new Date().toISOString();
+      try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+      if (typeof render === 'function') render();
     }
 
     // 2. Escuta alterações em tempo real feitas por outro operador/navegador
-    sbClient
-      .channel('sync-painel-prius')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'painel_estado', filter: `id=eq.${SUPABASE_ROW_ID}` },
-        payload => {
-          // Ignora eco da própria gravação feita há menos de 2 segundos
-          if (Date.now() - sbUltimaAtualizacaoLocal < 2000) return;
-          if (payload && payload.new && payload.new.dados) {
-            S = normalizarEstado(payload.new.dados);
-            try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-            if (typeof render === 'function') render();
-            toast('🔄 Atualizado por outro operador!');
+    if (!sbChannel) {
+      sbChannel = sbClient
+        .channel('sync-painel-prius')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'painel_estado', filter: `id=eq.${SUPABASE_ROW_ID}` },
+          payload => {
+            // Ignora eco da própria gravação feita há menos de 2 segundos
+            if (Date.now() - sbUltimaAtualizacaoLocal < 2000) return;
+            if (payload && payload.new && payload.new.dados) {
+              S = normalizarEstado(payload.new.dados);
+              S.meta = S.meta || {};
+              S.meta.ultimoSyncNuvem = S.meta.ultimoSyncNuvem || payload.new.atualizado_em || new Date().toISOString();
+              sbPendenciasLocais = false;
+              try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+              if (typeof render === 'function') render();
+              toast('🔄 Atualizado por outro operador!');
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
+    }
 
+    return true;
   } catch (e) {
+    sbConectado = false;
     console.error('Falha na inicialização do Supabase:', e);
+    return false;
   }
 }
 
 const save = () => {
+  sbPendenciasLocais = true;
   try {
     localStorage.setItem(KEY, JSON.stringify(S));
   } catch (e) {
