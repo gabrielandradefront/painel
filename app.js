@@ -882,13 +882,6 @@ document.addEventListener('click', async e => {
   if (a === 'copiar_resumo') {
     const tipo = t.dataset.tipo;
     resumoTipoAtual = tipo;
-    
-    // Gerar planilha se for 3 ou 4 semanas
-    if (tipo === '3' || tipo === '4') {
-      if (typeof baixarPlanilhaResumo === 'function') {
-        baixarPlanilhaResumo(tipo);
-      }
-    }
 
     if (typeof gerarResumoOperacional === 'function') {
       const txt = gerarResumoOperacional(tipo);
@@ -897,9 +890,21 @@ document.addEventListener('click', async e => {
       if (elResumo) elResumo.innerText = txt;
       copy(txt);
       const rotulo = tipo === 'dia' ? 'do dia' : (tipo === '4' ? 'do mês' : `de ${tipo} semana(s)`);
-      toast(tipo === '3' || tipo === '4' ? 'Resumo carregado e copiado! Planilha descarregada.' : `Resumo ${rotulo} carregado e copiado!`);
+      toast(`Resumo ${rotulo} carregado e copiado!`);
     }
     render();
+
+    // Gerar planilha formatada (.xlsx) automaticamente para 3 ou 4 semanas
+    if ((tipo === '3' || tipo === '4') && typeof baixarPlanilhaResumo === 'function') {
+      await baixarPlanilhaResumo(tipo);
+    }
+    return;
+  }
+
+  if (a === 'baixar_planilha_resumo') {
+    if (typeof baixarPlanilhaResumo === 'function') {
+      await baixarPlanilhaResumo(resumoTipoAtual || 'dia');
+    }
     return;
   }
 

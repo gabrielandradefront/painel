@@ -191,59 +191,574 @@ function cardApelidos() {
 
 // --- RENDERIZADOR DA ABA OPERAÇÕES ---
 
-function baixarPlanilhaResumo(tipo) {
-  const nSem = parseInt(tipo, 10);
-  const nDias = nSem * 7;
-  const dataFim = addD(hoje, nDias);
+async function baixarPlanilhaResumo(tipo) {
+  const agora = new Date();
+  const ehDia = tipo === 'dia';
+  const nSem = ehDia ? 0 : (parseInt(tipo, 10) || 1);
+  const nDias = ehDia ? 0 : nSem * 7;
+  const dataFim = ehDia ? hoje : addD(hoje, nDias);
+  const rotuloPeriodo = ehDia
+    ? 'RESUMO DO DIA'
+    : (nSem === 4 ? 'DO MÊS (4 SEMANAS)' : `DE ${nSem} SEMANA${nSem > 1 ? 'S' : ''}`);
+  const rotuloDias = ehDia ? 'Hoje' : `${nDias} dias`;
+  const slugPeriodo = ehDia ? 'dia' : `${nSem}-semanas`;
+  const geradoEm = `${agora.toLocaleDateString('pt-BR')} às ${pad(agora.getHours())}:${pad(agora.getMinutes())}`;
+
   const aulasPeriodo = S.aulas.filter(a => a.dia >= hoje && a.dia <= dataFim);
-  aulasPeriodo.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
-
-  let csv = 'DETALHAMENTO DE AULAS - ' + (nSem === 4 ? '4 SEMANAS (MES)' : '3 SEMANAS') + '\n\n';
-  csv += 'Data;Dia da Semana;Horario;Turma;Professor;Disciplina;Confirmacao de Aula;Material (Slides)\n';
-
-  aulasPeriodo.forEach(a => {
-    const data = br(a.dia);
-    const sem = wd(a.dia);
-    const hr = a.hora || '';
-    const tm = (a.turma || '').replace(/"/g, '""');
-    const pr = (a.prof || '').replace(/"/g, '""');
-    const dc = (a.desc || '').replace(/"/g, '""');
-    const cf = a.confirmada ? 'Confirmada' : 'Pendente';
-    const mat = a.materialPronto ? 'Pronto' : 'Pendente';
-    csv += `"${data}";"${sem}";"${hr}";"${tm}";"${pr}";"${dc}";"${cf}";"${mat}"\n`;
-  });
+  aulasPeriodo.sort((a, b) => (a.dia + (a.hora || '')).localeCompare(b.dia + (b.hora || '')));
 
   const repPend = S.reparos.filter(r => r.status !== 'Concluído');
-  if (repPend.length > 0) {
-    csv += '\n\nMANUTENCOES E REPAROS PENDENTES\n\n';
-    csv += 'Data Registro;Item;Local;Responsavel;Status;Observacoes\n';
-    repPend.forEach(r => {
-      const dt = br(r.dataReg || hoje);
-      const it = (r.item || '').replace(/"/g, '""');
-      const lc = (r.local || '').replace(/"/g, '""');
-      const rp = (r.resp || '').replace(/"/g, '""');
-      const st = (r.status || '').replace(/"/g, '""');
-      const ob = (r.obs || '').replace(/"/g, '""');
-      csv += `"${dt}";"${it}";"${lc}";"${rp}";"${st}";"${ob}"\n`;
-    });
-  }
-  
   const orcAguardando = (S.orc.itens || []).filter(i => i.status === 'Aguardando aprovação');
-  if (orcAguardando.length > 0) {
-    csv += '\n\nORCAMENTOS - AGUARDANDO APROVACAO\n\n';
-    csv += 'Fornecedor;Sem Frete;Frete;Total;Und.;Status\n';
-    orcAguardando.forEach(i => {
-      const forn = (i.forn || i.nome || '').replace(/"/g, '""');
-      const sf = brl(itemPrecoSemFrete(i));
-      const fr = brl(itemFrete(i));
-      const tot = brl(itemTotal(i));
-      const und = i.valorUnd !== undefined && i.valorUnd !== '' ? brl(num(i.valorUnd)) : (num(S.orc.qtdTotal) > 0 ? brl(itemPrecoSemFrete(i) / num(S.orc.qtdTotal)) : '');
-      const st = (i.status || '').replace(/"/g, '""');
-      csv += `"${forn}";"${sf}";"${fr}";"${tot}";"${und}";"${st}"\n`;
+  const G_periodo = groups(hoje, dataFim);
+
+  if (typeof window.ExcelJS === 'undefined') {
+    let csv = `\uFEFFDETALHAMENTO DE AULAS - ${rotuloPeriodo}\n\n`;
+    csv += 'Data;Dia da Semana;Horário;Turma;Professor;Disciplina;Confirmação de Aula;Material (Slides)\n';
+    aulasPeriodo.forEach(a => {
+      csv += `"${br(a.dia)}";"${wd(a.dia)}";"${a.hora || ''}";"${(a.turma || '').replace(/"/g, '""')}";"${(a.prof || '').replace(/"/g, '""')}";"${(a.desc || '').replace(/"/g, '""')}";"${a.confirmada ? 'Confirmada' : 'Pendente'}";"${a.materialPronto ? 'Pronto' : 'Pendente'}"\n`;
     });
+    if (repPend.length > 0) {
+      csv += '\n\nMANUTENÇÕES E REPAROS PENDENTES\n\nData Registro;Item;Local;Status;Observações\n';
+      repPend.forEach(r => {
+        csv += `"${br(r.dataReg || hoje)}";"${(r.item || '').replace(/"/g, '""')}";"${(r.local || '').replace(/"/g, '""')}";"${(r.status || '').replace(/"/g, '""')}";"${(r.obs || '').replace(/"/g, '""')}"\n`;
+      });
+    }
+    if (orcAguardando.length > 0) {
+      csv += '\n\nORÇAMENTOS - AGUARDANDO APROVAÇÃO\n\nFornecedor;Sem Frete;Frete;Total;Und.;Status\n';
+      orcAguardando.forEach(i => {
+        const und = i.valorUnd !== undefined && i.valorUnd !== '' ? brl(num(i.valorUnd)) : (num(S.orc.qtdTotal) > 0 ? brl(itemPrecoSemFrete(i) / num(S.orc.qtdTotal)) : '');
+        csv += `"${(i.forn || i.nome || '').replace(/"/g, '""')}";"${brl(itemPrecoSemFrete(i))}";"${brl(itemFrete(i))}";"${brl(itemTotal(i))}";"${und}";"${(i.status || '').replace(/"/g, '""')}"\n`;
+      });
+    }
+    await salvarArquivo(`planejamento-${slugPeriodo}-${iso(agora)}.csv`, new TextEncoder().encode(csv), 'text/csv;charset=utf-8;');
+    toast('Planilha CSV exportada com sucesso!');
+    return;
   }
 
-  salvarArquivo(`planejamento-${nSem}-semanas-${iso(new Date())}.csv`, new TextEncoder().encode(csv), 'text/csv;charset=utf-8;');
+  try {
+    toast('Gerando planilha operacional...');
+    const wb = new window.ExcelJS.Workbook();
+    wb.creator = 'Painel Operacional Prius';
+    wb.created = agora;
+    wb.modified = agora;
+
+    const FONT_NAME = 'Calibri';
+    const C_MIDNIGHT = 'FF121316';
+    const C_SLATE_SUB = 'FF1B1E26';
+    const C_SLATE_DARK = 'FF1E293B';
+    const C_AMBER = 'FFF59E0B';
+    const C_AMBER_LIGHT = 'FFFBBF24';
+    const C_BORDER = 'FFCBD5E1';
+    const C_ZEBRA = 'FFF8FAFC';
+    const C_WHITE = 'FFFFFFFF';
+    const C_TEXT = 'FF0F172A';
+    const C_MUTED = 'FF475569';
+    const C_EMERALD_BG = 'FFECFDF5';
+    const C_EMERALD_PILL = 'FFD1FAE5';
+    const C_EMERALD_TX = 'FF065F46';
+    const C_AMBER_BG = 'FFFFFBEB';
+    const C_AMBER_PILL = 'FFFEF3C7';
+    const C_AMBER_TX = 'FF92400E';
+    const C_BLUE_BG = 'FFEFF6FF';
+    const C_BLUE_PILL = 'FFDBEAFE';
+    const C_BLUE_TX = 'FF1E40AF';
+
+    const borderThin = {
+      top: { style: 'thin', color: { argb: C_BORDER } },
+      left: { style: 'thin', color: { argb: C_BORDER } },
+      bottom: { style: 'thin', color: { argb: C_BORDER } },
+      right: { style: 'thin', color: { argb: C_BORDER } }
+    };
+
+    const aplicarBanner = (ws, maxCol, titulo, subtitulo) => {
+      const endColLetter = ws.getColumn(maxCol).letter;
+      ws.mergeCells(`A1:${endColLetter}1`);
+      const c1 = ws.getCell('A1');
+      c1.value = titulo;
+      c1.font = { name: FONT_NAME, size: 13.5, bold: true, color: { argb: C_WHITE } };
+      c1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_MIDNIGHT } };
+      c1.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      ws.getRow(1).height = 32;
+
+      ws.mergeCells(`A2:${endColLetter}2`);
+      const c2 = ws.getCell('A2');
+      c2.value = subtitulo;
+      c2.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: C_AMBER_LIGHT } };
+      c2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_SLATE_SUB } };
+      c2.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      ws.getRow(2).height = 22;
+      for (let col = 1; col <= maxCol; col++) {
+        ws.getCell(2, col).border = { bottom: { style: 'medium', color: { argb: C_AMBER } } };
+      }
+      ws.getRow(3).height = 10;
+    };
+
+    const estilizarHeader = (ws, rowIdx, headers, centerCols = [], rightCols = []) => {
+      const row = ws.getRow(rowIdx);
+      row.height = 27;
+      headers.forEach((h, i) => {
+        const colIdx = i + 1;
+        const cell = row.getCell(colIdx);
+        cell.value = h;
+        cell.font = { name: FONT_NAME, size: 10.5, bold: true, color: { argb: C_WHITE } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_SLATE_DARK } };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: centerCols.includes(colIdx) ? 'center' : (rightCols.includes(colIdx) ? 'right' : 'left'),
+          wrapText: true
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: C_SLATE_DARK } },
+          bottom: { style: 'medium', color: { argb: C_AMBER } },
+          left: { style: 'thin', color: { argb: 'FF334155' } },
+          right: { style: 'thin', color: { argb: 'FF334155' } }
+        };
+      });
+    };
+
+    // ========================================================
+    // ABA 1: PLANEJAMENTO DE AULAS
+    // ========================================================
+    const wsAulas = wb.addWorksheet('Planejamento de Aulas', {
+      views: [{ state: 'frozen', ySplit: 7, showGridLines: false }],
+      pageSetup: {
+        paperSize: 9,
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 }
+      }
+    });
+
+    aplicarBanner(
+      wsAulas,
+      9,
+      `PAINEL OPERACIONAL PRIUS  •  PLANEJAMENTO DE AULAS (${rotuloPeriodo})`,
+      `Período: ${br(hoje)} a ${br(dataFim)} (${rotuloDias})   |   Manutenções Abertas: ${repPend.length}   |   Exportado em: ${geradoEm}`
+    );
+
+    const firstAulaRow = 8;
+    const lastAulaRow = aulasPeriodo.length > 0 ? firstAulaRow + aulasPeriodo.length - 1 : firstAulaRow;
+    const qtdConf = aulasPeriodo.filter(a => a.confirmada).length;
+    const qtdMatOk = aulasPeriodo.filter(a => a.materialPronto).length;
+    const qtdPendGeral = aulasPeriodo.filter(a => !a.confirmada).length + aulasPeriodo.filter(a => !a.materialPronto).length;
+
+    const kpiAulas = [
+      {
+        rangeLabel: 'A4:B4', rangeVal: 'A5:B5',
+        label: 'AULAS NO PERÍODO',
+        formula: aulasPeriodo.length ? `COUNTA(D${firstAulaRow}:D${lastAulaRow})` : '0',
+        result: aulasPeriodo.length,
+        bg: C_ZEBRA, labelColor: C_MUTED, valColor: C_TEXT
+      },
+      {
+        rangeLabel: 'C4:D4', rangeVal: 'C5:D5',
+        label: '✅ AULAS CONFIRMADAS',
+        formula: aulasPeriodo.length ? `COUNTIF(G${firstAulaRow}:G${lastAulaRow},"Confirmada")` : '0',
+        result: qtdConf,
+        bg: C_EMERALD_BG, labelColor: C_EMERALD_TX, valColor: C_EMERALD_TX
+      },
+      {
+        rangeLabel: 'E4:F4', rangeVal: 'E5:F5',
+        label: '📦 MATERIAIS PRONTOS',
+        formula: aulasPeriodo.length ? `COUNTIF(H${firstAulaRow}:H${lastAulaRow},"Pronto")` : '0',
+        result: qtdMatOk,
+        bg: C_BLUE_BG, labelColor: C_BLUE_TX, valColor: C_BLUE_TX
+      },
+      {
+        rangeLabel: 'G4:I4', rangeVal: 'G5:I5',
+        label: '⏳ PENDÊNCIAS (AULAS + SLIDES)',
+        formula: aulasPeriodo.length ? `COUNTIF(G${firstAulaRow}:G${lastAulaRow},"Pendente")+COUNTIF(H${firstAulaRow}:H${lastAulaRow},"Pendente")` : '0',
+        result: qtdPendGeral,
+        bg: C_AMBER_BG, labelColor: C_AMBER_TX, valColor: C_AMBER_TX
+      }
+    ];
+
+    wsAulas.getRow(4).height = 18;
+    wsAulas.getRow(5).height = 26;
+    kpiAulas.forEach(k => {
+      wsAulas.mergeCells(k.rangeLabel);
+      wsAulas.mergeCells(k.rangeVal);
+      const lblCell = wsAulas.getCell(k.rangeLabel.split(':')[0]);
+      lblCell.value = k.label;
+      lblCell.font = { name: FONT_NAME, size: 8.5, bold: true, color: { argb: k.labelColor } };
+      lblCell.alignment = { vertical: 'bottom', horizontal: 'center' };
+
+      const valCell = wsAulas.getCell(k.rangeVal.split(':')[0]);
+      valCell.value = { formula: k.formula, result: k.result };
+      valCell.numFmt = '#,##0';
+      valCell.font = { name: FONT_NAME, size: 13, bold: true, color: { argb: k.valColor } };
+      valCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      const [startCol, endCol] = k.rangeLabel.split(':').map(ref => wsAulas.getCell(ref).col);
+      for (let c = startCol; c <= endCol; c++) {
+        const topC = wsAulas.getCell(4, c);
+        const botC = wsAulas.getCell(5, c);
+        topC.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.bg } };
+        botC.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.bg } };
+        topC.border = {
+          top: { style: 'thin', color: { argb: C_BORDER } },
+          left: c === startCol ? { style: 'thin', color: { argb: C_BORDER } } : undefined,
+          right: c === endCol ? { style: 'thin', color: { argb: C_BORDER } } : undefined
+        };
+        botC.border = {
+          bottom: { style: 'thin', color: { argb: C_BORDER } },
+          left: c === startCol ? { style: 'thin', color: { argb: C_BORDER } } : undefined,
+          right: c === endCol ? { style: 'thin', color: { argb: C_BORDER } } : undefined
+        };
+      }
+    });
+
+    wsAulas.getRow(6).height = 10;
+
+    estilizarHeader(
+      wsAulas,
+      7,
+      ['Data', 'Dia', 'Horário', 'Turma', 'Professor', 'Disciplina / Descrição', 'Confirmação', 'Material (Slides)', 'Prazo Slides'],
+      [1, 2, 3, 7, 8, 9],
+      []
+    );
+
+    const widthsAulas = [13, 10, 11, 24, 24, 30, 16, 18, 14];
+
+    if (aulasPeriodo.length > 0) {
+      wsAulas.autoFilter = { from: { row: 7, column: 1 }, to: { row: lastAulaRow, column: 9 } };
+      aulasPeriodo.forEach((a, idx) => {
+        const r = firstAulaRow + idx;
+        const row = wsAulas.getRow(r);
+        row.height = 23;
+        const bg = idx % 2 === 1 ? C_ZEBRA : C_WHITE;
+
+        const confTxt = a.confirmada ? 'Confirmada' : 'Pendente';
+        const matTxt = a.materialPronto ? 'Pronto' : 'Pendente';
+        const prazoTxt = br(prazoEntregaMaterial(a.dia)) || '—';
+        const profNome = typeof profCanon === 'function' ? profCanon(a.prof || '') : (a.prof || '');
+
+        row.getCell(1).value = br(a.dia);
+        row.getCell(2).value = wd(a.dia).toUpperCase();
+        row.getCell(3).value = a.hora || '—';
+        row.getCell(4).value = a.turma || '—';
+        row.getCell(5).value = profNome || 'A definir';
+        row.getCell(6).value = a.desc || '—';
+        row.getCell(7).value = confTxt;
+        row.getCell(8).value = matTxt;
+        row.getCell(9).value = prazoTxt;
+
+        widthsAulas[3] = Math.max(widthsAulas[3], Math.min(40, (a.turma || '').length + 4));
+        widthsAulas[4] = Math.max(widthsAulas[4], Math.min(36, (profNome || '').length + 4));
+        widthsAulas[5] = Math.max(widthsAulas[5], Math.min(44, (a.desc || '').length + 4));
+
+        for (let c = 1; c <= 9; c++) {
+          const cell = row.getCell(c);
+          cell.border = borderThin;
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: [1, 2, 3, 7, 8, 9].includes(c) ? 'center' : 'left',
+            wrapText: c === 6
+          };
+
+          if (c === 7) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: a.confirmada ? C_EMERALD_PILL : C_AMBER_PILL } };
+            cell.font = { name: FONT_NAME, size: 9.5, bold: true, color: { argb: a.confirmada ? C_EMERALD_TX : C_AMBER_TX } };
+          } else if (c === 8) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: a.materialPronto ? C_EMERALD_PILL : C_AMBER_PILL } };
+            cell.font = { name: FONT_NAME, size: 9.5, bold: true, color: { argb: a.materialPronto ? C_EMERALD_TX : C_AMBER_TX } };
+          } else {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = {
+              name: FONT_NAME,
+              size: 10.5,
+              bold: c === 4 || c === 5,
+              color: { argb: (c === 2 || c === 6 || c === 9) ? C_MUTED : C_TEXT }
+            };
+          }
+        }
+      });
+    } else {
+      wsAulas.mergeCells(`A${firstAulaRow}:I${firstAulaRow}`);
+      const emptyCell = wsAulas.getCell(`A${firstAulaRow}`);
+      emptyCell.value = 'Nenhuma aula agendada para este período.';
+      emptyCell.font = { name: FONT_NAME, size: 11, italic: true, color: { argb: C_MUTED } };
+      emptyCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      wsAulas.getRow(firstAulaRow).height = 28;
+      for (let c = 1; c <= 9; c++) {
+        wsAulas.getCell(firstAulaRow, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_ZEBRA } };
+        wsAulas.getCell(firstAulaRow, c).border = borderThin;
+      }
+    }
+
+    widthsAulas.forEach((w, i) => { wsAulas.getColumn(i + 1).width = w; });
+
+    // ========================================================
+    // ABA 2: RECIBOS E APROVAÇÕES DOCENTES (SE HOUVER GRUPOS)
+    // ========================================================
+    if (G_periodo.length > 0) {
+      const wsDocs = wb.addWorksheet('Recibos Docentes', {
+        views: [{ state: 'frozen', ySplit: 4, showGridLines: false }],
+        pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+      });
+
+      const pendCount = typeof docPend === 'function' ? docPend(G_periodo) : 0;
+      aplicarBanner(
+        wsDocs,
+        7,
+        'PAINEL OPERACIONAL PRIUS  •  CONTROLE DE RECIBOS E CONTRATOS',
+        `Período: ${br(hoje)} a ${br(dataFim)}   |   Grupos Professor/Dia: ${G_periodo.length}   |   Pendentes: ${pendCount}`
+      );
+
+      estilizarHeader(
+        wsDocs,
+        4,
+        ['Data', 'Dia', 'Professor', 'Aulas / Turmas', 'Recibo', 'Aprovado', 'Enviado'],
+        [1, 2, 5, 6, 7],
+        []
+      );
+
+      const firstDocRow = 5;
+      const lastDocRow = firstDocRow + G_periodo.length - 1;
+      wsDocs.autoFilter = { from: { row: 4, column: 1 }, to: { row: lastDocRow, column: 7 } };
+
+      const wDocs = [13, 10, 26, 38, 15, 15, 15];
+      G_periodo.forEach((g, idx) => {
+        const r = firstDocRow + idx;
+        const row = wsDocs.getRow(r);
+        row.height = 23;
+        const bg = idx % 2 === 1 ? C_ZEBRA : C_WHITE;
+        const d = S.docs[g.k] || {};
+        const turmasStr = g.aulas.map(a => `${a.turma}${a.hora ? ' (' + a.hora + ')' : ''}`).join(' + ');
+
+        row.getCell(1).value = br(g.dia);
+        row.getCell(2).value = wd(g.dia).toUpperCase();
+        row.getCell(3).value = g.prof;
+        row.getCell(4).value = turmasStr;
+        row.getCell(5).value = d.recibo ? 'Sim' : 'Pendente';
+        row.getCell(6).value = d.aprovado ? 'Sim' : 'Pendente';
+        row.getCell(7).value = d.enviado ? 'Sim' : 'Pendente';
+
+        wDocs[2] = Math.max(wDocs[2], Math.min(38, (g.prof || '').length + 4));
+        wDocs[3] = Math.max(wDocs[3], Math.min(54, turmasStr.length + 4));
+
+        const flags = { 5: !!d.recibo, 6: !!d.aprovado, 7: !!d.enviado };
+        for (let c = 1; c <= 7; c++) {
+          const cell = row.getCell(c);
+          cell.border = borderThin;
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: [1, 2, 5, 6, 7].includes(c) ? 'center' : 'left',
+            wrapText: c === 4
+          };
+          if (c >= 5) {
+            const ok = flags[c];
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ok ? C_EMERALD_PILL : C_AMBER_PILL } };
+            cell.font = { name: FONT_NAME, size: 9.5, bold: true, color: { argb: ok ? C_EMERALD_TX : C_AMBER_TX } };
+          } else {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = { name: FONT_NAME, size: 10.5, bold: c === 3, color: { argb: c === 2 ? C_MUTED : C_TEXT } };
+          }
+        }
+      });
+
+      const totDocRow = wsDocs.getRow(lastDocRow + 1);
+      totDocRow.height = 24;
+      wsDocs.mergeCells(`A${lastDocRow + 1}:D${lastDocRow + 1}`);
+      totDocRow.getCell(1).value = 'CONCLUÍDOS NESTA ETAPA';
+      totDocRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'right' };
+      totDocRow.getCell(5).value = { formula: `COUNTIF(E${firstDocRow}:E${lastDocRow},"Sim")`, result: G_periodo.filter(g => (S.docs[g.k] || {}).recibo).length };
+      totDocRow.getCell(6).value = { formula: `COUNTIF(F${firstDocRow}:F${lastDocRow},"Sim")`, result: G_periodo.filter(g => (S.docs[g.k] || {}).aprovado).length };
+      totDocRow.getCell(7).value = { formula: `COUNTIF(G${firstDocRow}:G${lastDocRow},"Sim")`, result: G_periodo.filter(g => (S.docs[g.k] || {}).enviado).length };
+      for (let c = 1; c <= 7; c++) {
+        const cell = totDocRow.getCell(c);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        cell.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: c >= 5 ? C_EMERALD_TX : C_MUTED } };
+        cell.border = { top: { style: 'medium', color: { argb: C_BORDER } }, bottom: { style: 'thin', color: { argb: C_BORDER } }, left: { style: 'thin', color: { argb: C_BORDER } }, right: { style: 'thin', color: { argb: C_BORDER } } };
+        if (c >= 5) {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.numFmt = '#,##0';
+        }
+      }
+
+      wDocs.forEach((w, i) => { wsDocs.getColumn(i + 1).width = w; });
+    }
+
+    // ========================================================
+    // ABA 3: MANUTENÇÕES E REPAROS PENDENTES (SE HOUVER)
+    // ========================================================
+    if (repPend.length > 0) {
+      const wsRep = wb.addWorksheet('Manutenções Pendentes', {
+        views: [{ state: 'frozen', ySplit: 4, showGridLines: false }],
+        pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+      });
+
+      aplicarBanner(
+        wsRep,
+        5,
+        'PAINEL OPERACIONAL PRIUS  •  MANUTENÇÕES E REPAROS EM ABERTO',
+        `Chamados em aberto: ${repPend.length}   |   Exportado em: ${geradoEm}`
+      );
+
+      estilizarHeader(
+        wsRep,
+        4,
+        ['Data Registro', 'Local', 'Item / Problema', 'Status', 'Observações'],
+        [1, 2, 4],
+        []
+      );
+
+      const firstRepRow = 5;
+      const lastRepRow = firstRepRow + repPend.length - 1;
+      wsRep.autoFilter = { from: { row: 4, column: 1 }, to: { row: lastRepRow, column: 5 } };
+
+      const wRep = [15, 18, 34, 18, 38];
+      repPend.forEach((r, idx) => {
+        const rowNum = firstRepRow + idx;
+        const row = wsRep.getRow(rowNum);
+        row.height = 24;
+        const bg = idx % 2 === 1 ? C_ZEBRA : C_WHITE;
+        const emAndamento = r.status === 'Em andamento';
+
+        row.getCell(1).value = br(r.dataReg || hoje);
+        row.getCell(2).value = r.local || 'Geral';
+        row.getCell(3).value = r.item || '—';
+        row.getCell(4).value = r.status || 'Pendente';
+        row.getCell(5).value = r.obs || '—';
+
+        wRep[2] = Math.max(wRep[2], Math.min(48, (r.item || '').length + 4));
+        wRep[4] = Math.max(wRep[4], Math.min(52, (r.obs || '').length + 4));
+
+        for (let c = 1; c <= 5; c++) {
+          const cell = row.getCell(c);
+          cell.border = borderThin;
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: [1, 2, 4].includes(c) ? 'center' : 'left',
+            wrapText: c === 5
+          };
+          if (c === 4) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: emAndamento ? C_BLUE_PILL : C_AMBER_PILL } };
+            cell.font = { name: FONT_NAME, size: 9.5, bold: true, color: { argb: emAndamento ? C_BLUE_TX : C_AMBER_TX } };
+          } else if (c === 2) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: C_AMBER_TX } };
+          } else {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = { name: FONT_NAME, size: 10.5, bold: c === 3, color: { argb: c === 5 ? C_MUTED : C_TEXT } };
+          }
+        }
+      });
+
+      wRep.forEach((w, i) => { wsRep.getColumn(i + 1).width = w; });
+    }
+
+    // ========================================================
+    // ABA 4: ORÇAMENTOS AGUARDANDO APROVAÇÃO (SE HOUVER)
+    // ========================================================
+    if (orcAguardando.length > 0) {
+      const wsOrc = wb.addWorksheet('Orçamentos Aguardando', {
+        views: [{ state: 'frozen', ySplit: 4, showGridLines: false }],
+        pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+      });
+
+      aplicarBanner(
+        wsOrc,
+        7,
+        'PAINEL OPERACIONAL PRIUS  •  ORÇAMENTOS AGUARDANDO APROVAÇÃO',
+        `Cotação: ${S.orc.titulo || 'Cotação Atual'}   |   Fornecedores aguardando: ${orcAguardando.length}   |   Exportado em: ${geradoEm}`
+      );
+
+      estilizarHeader(
+        wsOrc,
+        4,
+        ['Fornecedor', 'Valor s/ Frete', 'Frete', 'Valor Total', 'Valor Unitário', 'Status', 'Link / Referência'],
+        [6],
+        [2, 3, 4, 5]
+      );
+
+      const qtdOrc = num(S.orc.qtdTotal);
+      const orcOrdenados = [...orcAguardando].sort((a, b) => itemTotal(a) - itemTotal(b));
+      const firstOrcRow = 5;
+      const lastOrcRow = firstOrcRow + orcOrdenados.length - 1;
+      wsOrc.autoFilter = { from: { row: 4, column: 1 }, to: { row: lastOrcRow, column: 7 } };
+
+      const wOrc = [28, 16, 14, 17, 16, 22, 32];
+      orcOrdenados.forEach((i, idx) => {
+        const r = firstOrcRow + idx;
+        const row = wsOrc.getRow(r);
+        row.height = 24;
+        const bg = idx === 0 ? C_EMERALD_BG : (idx % 2 === 1 ? C_ZEBRA : C_WHITE);
+        const vSem = itemPrecoSemFrete(i);
+        const vFr = itemFrete(i);
+        const vTot = vSem + vFr;
+        const hasUnd = i.valorUnd !== undefined && i.valorUnd !== '';
+        const vUnd = hasUnd ? num(i.valorUnd) : (qtdOrc > 0 ? vSem / qtdOrc : null);
+        const urlCompra = (i.link || i.obs || '').trim();
+        const dom = typeof extrairDominio === 'function' ? extrairDominio(urlCompra) : '';
+
+        row.getCell(1).value = i.forn || i.nome || 'Fornecedor';
+        row.getCell(2).value = vSem;
+        row.getCell(3).value = vFr;
+        row.getCell(4).value = { formula: `B${r}+C${r}`, result: vTot };
+        if (hasUnd) {
+          row.getCell(5).value = vUnd;
+        } else if (qtdOrc > 0) {
+          row.getCell(5).value = { formula: `B${r}/${qtdOrc}`, result: vUnd };
+        } else {
+          row.getCell(5).value = '—';
+        }
+        row.getCell(6).value = i.status || 'Aguardando aprovação';
+
+        const isUrl = /^(https?:\/\/|www\.)/i.test(urlCompra) || (dom && dom !== 'link' && urlCompra.includes('.'));
+        if (urlCompra && isUrl) {
+          const fullUrl = /^https?:\/\//i.test(urlCompra) ? urlCompra : 'https://' + urlCompra;
+          row.getCell(7).value = { text: dom ? `🔗 ${dom}` : urlCompra, hyperlink: fullUrl };
+        } else {
+          row.getCell(7).value = urlCompra || '—';
+        }
+
+        wOrc[0] = Math.max(wOrc[0], Math.min(42, (i.forn || i.nome || '').length + 4));
+
+        for (let c = 1; c <= 7; c++) {
+          const cell = row.getCell(c);
+          cell.border = borderThin;
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: c === 6 ? 'center' : (c >= 2 && c <= 5 ? 'right' : 'left')
+          };
+          if (c === 6) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_AMBER_PILL } };
+            cell.font = { name: FONT_NAME, size: 9.5, bold: true, color: { argb: C_AMBER_TX } };
+          } else if (c === 7 && urlCompra && isUrl) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = { name: FONT_NAME, size: 10, underline: true, color: { argb: 'FF2563EB' } };
+          } else {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = {
+              name: FONT_NAME,
+              size: 10.5,
+              bold: c === 1 || c === 4,
+              color: { argb: (idx === 0 && c === 4) ? C_EMERALD_TX : C_TEXT }
+            };
+            if (c >= 2 && c <= 5 && typeof cell.value !== 'string') {
+              cell.numFmt = '"R$ "#,##0.00';
+            }
+          }
+        }
+      });
+
+      wOrc.forEach((w, i) => { wsOrc.getColumn(i + 1).width = w; });
+    }
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const ok = await salvarArquivo(
+      `planejamento-${slugPeriodo}-${iso(agora)}.xlsx`,
+      new Uint8Array(buffer),
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    if (ok) toast('Planilha Excel (.xlsx) exportada com sucesso!');
+  } catch (err) {
+    console.error('Erro ao gerar planilha operacional:', err);
+    toast('Erro ao gerar a planilha Excel.');
+  }
 }
 
 function viewOperacional() {
@@ -315,7 +830,8 @@ function viewOperacional() {
         </div>
         <div class="mu" style="font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
           <span>✏️ <b>Área editável</b> (clique no texto abaixo para alterar livremente ou nos botões acima para alternar períodos):</span>
-          <div style="display:flex; gap:6px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="b" data-act="baixar_planilha_resumo" style="font-size:11.5px; padding:3px 9px;" title="Gerar planilha Excel (.xlsx) formatada do período selecionado">📥 Exportar Planilha (.xlsx)</button>
             <button class="b" data-act="copiar_resumo_editado" style="font-size:11.5px; padding:3px 9px;" title="Copiar exatamente o que foi editado abaixo">📋 Copiar texto editado</button>
             <button class="b" data-act="restaurar_resumo_original" style="font-size:11.5px; padding:3px 9px;" title="Recarregar o modelo padrão">🔄 Restaurar original</button>
           </div>
