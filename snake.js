@@ -56,15 +56,28 @@
     3: { head: '#38bdf8', body: '#0284c7', tag: 'J3', nome: 'Jogador 3' }
   };
 
+  const TICK_MS = 165;
+  const DEAD_RECKONING_MS = 190;
+  const INATIVIDADE_TIMEOUT_MS = 4000;
+
   let jogoLoop = null;
-  let renderLoop = null;
   let fallbackTimer = null;
+  let appleFallbackTimer = null;
   let handlerTeclasJogo = null;
   let resetarRodadaFn = null;
   let snakeChannel = null;
 
+  function gerarIdUnicoInstancia() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return 'p_' + crypto.randomUUID();
+    }
+    return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+  }
+
   function abrirSnake() {
     if (document.getElementById('modalSnake')) return;
+
+    const playerId = gerarIdUnicoInstancia();
 
     const modal = document.createElement('div');
     modal.id = 'modalSnake';
@@ -123,42 +136,52 @@
 
     modal.onclick = e => { if (e.target === modal) fecharSnake(); };
 
-    iniciarMotorSnake();
+    iniciarMotorSnake(playerId);
   }
 
-  function fecharSnake() {
+  async function fecharSnake() {
     const modal = document.getElementById('modalSnake');
+    if (!modal || modal.dataset.fechando === '1') return;
+    modal.dataset.fechando = '1';
+
     if (fallbackTimer) {
       clearTimeout(fallbackTimer);
       fallbackTimer = null;
+    }
+    if (appleFallbackTimer) {
+      clearTimeout(appleFallbackTimer);
+      appleFallbackTimer = null;
     }
     if (jogoLoop) {
       clearInterval(jogoLoop);
       jogoLoop = null;
     }
-    if (renderLoop) {
-      clearInterval(renderLoop);
-      renderLoop = null;
-    }
     if (handlerTeclasJogo) {
       window.removeEventListener('keydown', handlerTeclasJogo);
       handlerTeclasJogo = null;
     }
+
     if (snakeChannel) {
       const ch = snakeChannel;
       snakeChannel = null;
-      try { ch.untrack().catch(() => {}); } catch (e) {}
+      try {
+        await Promise.race([
+          Promise.resolve(ch.untrack()),
+          new Promise(res => setTimeout(res, 250))
+        ]);
+      } catch (e) {}
       try {
         if (typeof sbClient !== 'undefined' && sbClient && typeof sbClient.removeChannel === 'function') {
-          sbClient.removeChannel(ch);
+          await Promise.resolve(sbClient.removeChannel(ch));
         }
       } catch (e) {}
     }
+
     resetarRodadaFn = null;
-    if (modal) modal.remove();
+    if (modal.isConnected) modal.remove();
   }
 
-  function iniciarMotorSnake() {
+  function iniciarMotorSnake(playerId) {
     const canvas = document.getElementById('canvasSnake');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -173,8 +196,6 @@
 
     const gridSize = 20;
     const tileCount = canvas.width / gridSize; // 800 / 20 = 40
-
-    const playerId = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
     const myJoinedAt = Date.now();
 
     let modoMultiplayer = false;
@@ -182,16 +203,14 @@
     let mySlot = 1; // 1, 2, 3 ou 0 (espectador)
     let mySnake = [];
     let dx = 1, dy = 0;
+    let inputQueue = [];
     let myScore = 0;
     let myAlive = true;
-    let mudouDirecao = false;
     let apples = [];
 
-    // Estado remoto dos outros jogadores: { [id]: { id, slot, joinedAt, score, alive, snake, dx, dy } }
+    // Estado remoto dos outros jogadores:
+    // { [id]: { id, slot, joinedAt, score, alive, snake, dx, dy, ts, lastPacketTime, timedOut } }
     let remotePlayers = {};
-    // Lista ordenada dos participantes com presença ativa no canal
-    let presencaLista = [];
-    // Guarda IDs recém-desconectados para ignorar pacotes atrasados em trânsito
     const leftIds = new Set();
 
     function temSupabaseAtivo() {
@@ -229,22 +248,12 @@
       }
 
       Object.values(remotePlayers).forEach(rp => {
-        if (rp.id !== playerId && rp.slot >= 1 && rp.slot <= 3) {
+        if (rp.id !== playerId && rp.slot >= 1 && rp.slot <= 3 && !rp.timedOut) {
           lista.push({ ...rp, isLocal: false });
         }
       });
 
       return lista.sort((a, b) => a.slot - b.slot);
-    }
-
-    function obterHostId() {
-      const ativos = obterJogadoresAtivos();
-      if (!ativos.length) return playerId;
-      return ativos.map(p => p.id).sort()[0];
-    }
-
-    function ehHost() {
-      return !modoMultiplayer || obterHostId() === playerId;
     }
 
     function obterTodosCorposOcupados(ignorarLocal = false) {
@@ -253,17 +262,17 @@
         mySnake.forEach(p => ocupados.add(`${p.x},${p.y}`));
       }
       Object.values(remotePlayers).forEach(rp => {
-        if (rp.id !== playerId && rp.alive && Array.isArray(rp.snake)) {
+        if (rp.id !== playerId && rp.alive && !rp.timedOut && Array.isArray(rp.snake)) {
           rp.snake.forEach(p => ocupados.add(`${p.x},${p.y}`));
         }
       });
       return ocupados;
     }
 
-    function gerarMacaLivre(ocupadosExtras) {
+    function gerarMacaLivre(extrasOcupados) {
       const ocupados = obterTodosCorposOcupados(false);
       apples.forEach(a => ocupados.add(`${a.x},${a.y}`));
-      if (ocupadosExtras) ocupadosExtras.forEach(k => ocupados.add(k));
+      if (extrasOcupados) extrasOcupados.forEach(k => ocupados.add(k));
 
       for (let tent = 0; tent < 400; tent++) {
         const x = Math.floor(Math.random() * tileCount);
@@ -279,10 +288,12 @@
       return { x: 10, y: 10 };
     }
 
-    function garantirMacas(transmitir = false) {
-      if (!ehHost()) return;
-      const ativos = obterJogadoresAtivos();
-      const alvo = ativos.length >= 2 ? 2 : 1;
+    function quantidadeAlvoMacas() {
+      return modoMultiplayer ? 2 : 1;
+    }
+
+    function preencherMacas(transmitir = false) {
+      const alvo = quantidadeAlvoMacas();
       let alterou = false;
 
       if (apples.length > alvo) {
@@ -294,17 +305,18 @@
         alterou = true;
       }
 
-      if (alterou && transmitir) transmitirMacas();
+      if (alterou && transmitir) {
+        enviarFoodSync();
+      }
     }
 
     function gerarPosicaoSegura() {
       const ocupados = obterTodosCorposOcupados(true);
       apples.forEach(a => ocupados.add(`${a.x},${a.y}`));
 
-      // Evita nascer na cara de outra cobrinha viva
       const zonaPerigo = new Set(ocupados);
       Object.values(remotePlayers).forEach(rp => {
-        if (rp.alive && Array.isArray(rp.snake) && rp.snake[0]) {
+        if (rp.alive && !rp.timedOut && Array.isArray(rp.snake) && rp.snake[0]) {
           const h = rp.snake[0];
           for (let ox = -3; ox <= 3; ox++) {
             for (let oy = -3; oy <= 3; oy++) {
@@ -355,50 +367,43 @@
           id: playerId,
           joinedAt: myJoinedAt,
           slot: mySlot,
-          score: myScore,
           alive: myAlive
         });
       } catch (e) {}
     }
 
-    function transmitirEstadoCobrinha() {
+    function enviarMovimento(dirOverride) {
       if (!snakeChannel || !modoMultiplayer || mySlot < 1 || mySlot > 3) return;
+      const dirEnvio = dirOverride || { dx, dy };
       try {
         snakeChannel.send({
           type: 'broadcast',
-          event: 'snake_state',
+          event: 'move',
           payload: {
             id: playerId,
             slot: mySlot,
-            joinedAt: myJoinedAt,
+            snake: mySnake,
+            dx: dirEnvio.dx,
+            dy: dirEnvio.dy,
             score: myScore,
             alive: myAlive,
-            snake: mySnake,
-            dx,
-            dy
+            ts: Date.now()
           }
         });
       } catch (e) {}
     }
 
-    function transmitirMacas() {
-      if (!snakeChannel || !modoMultiplayer || !ehHost()) return;
-      try {
-        snakeChannel.send({
-          type: 'broadcast',
-          event: 'apples_sync',
-          payload: { hostId: playerId, apples }
-        });
-      } catch (e) {}
-    }
-
-    function transmitirMacaComida(apple) {
+    function enviarFoodSync() {
       if (!snakeChannel || !modoMultiplayer) return;
       try {
         snakeChannel.send({
           type: 'broadcast',
-          event: 'apple_eaten',
-          payload: { by: playerId, x: apple.x, y: apple.y }
+          event: 'food_sync',
+          payload: {
+            by: playerId,
+            apples,
+            ts: Date.now()
+          }
         });
       } catch (e) {}
     }
@@ -489,7 +494,7 @@
       }
     }
 
-    function reiniciarMinhaCobrinha(ehNovaRodada = true) {
+    function reiniciarMinhaCobrinha(ehNovaRodada = true, forcarNovasMacas = false) {
       if (mySlot < 1 || mySlot > 3) {
         atualizarInterface();
         return;
@@ -499,35 +504,52 @@
       mySnake = spawn.snake;
       dx = spawn.dx;
       dy = spawn.dy;
+      inputQueue = [];
       if (ehNovaRodada) myScore = 0;
       myAlive = true;
-      mudouDirecao = false;
 
-      if (ehHost()) {
-        if (ehNovaRodada) apples = [];
-        garantirMacas(true);
+      const outrosAtivos = Object.values(remotePlayers).some(rp => rp.id !== playerId && !rp.timedOut && rp.slot >= 1);
+
+      if (!modoMultiplayer || forcarNovasMacas || (!outrosAtivos && apples.length === 0)) {
+        if (forcarNovasMacas) apples = [];
+        preencherMacas(true);
+      } else if (apples.length === 0) {
+        // Aguarda food_sync dos jogadores já conectados; se não chegar em 600ms, gera localmente
+        if (appleFallbackTimer) clearTimeout(appleFallbackTimer);
+        appleFallbackTimer = setTimeout(() => {
+          if (apples.length < quantidadeAlvoMacas()) {
+            preencherMacas(true);
+            desenharArena();
+          }
+        }, 600);
       }
 
       transmitirPresenca();
-      transmitirEstadoCobrinha();
+      enviarMovimento();
       atualizarInterface();
     }
 
     function solicitarReiniciarRodada() {
       const ativos = obterJogadoresAtivos();
       const vivos = ativos.filter(p => p.alive).length;
-      if (vivos > 0) return; // Bloqueado enquanto houver pelo menos 1 vivo
+      if (vivos > 0) return;
+
+      const agora = Date.now();
+      Object.values(remotePlayers).forEach(rp => {
+        rp.timedOut = false;
+        rp.lastPacketTime = agora;
+      });
 
       if (modoMultiplayer && snakeChannel) {
         try {
           snakeChannel.send({
             type: 'broadcast',
             event: 'reset_all',
-            payload: { by: playerId, ts: Date.now() }
+            payload: { by: playerId, ts: agora }
           });
         } catch (e) {}
       }
-      reiniciarMinhaCobrinha(true);
+      reiniciarMinhaCobrinha(true, true);
     }
 
     resetarRodadaFn = solicitarReiniciarRodada;
@@ -544,31 +566,42 @@
         if (meta && meta.id) todos.push(meta);
       });
 
-      // Ordenação determinística por chegada e ID
       todos.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0) || String(a.id).localeCompare(String(b.id)));
-      presencaLista = todos;
 
-      // Remove jogadores desconectados do mapa remoto
       const idsAtivos = new Set(todos.map(x => x.id));
+      let entrouNovoJogador = false;
+
       Object.keys(remotePlayers).forEach(id => {
         if (!idsAtivos.has(id)) delete remotePlayers[id];
       });
 
-      // Atualiza metadados básicos de quem está presente
+      const agora = Date.now();
       todos.forEach(p => {
         if (p.id === playerId) return;
-        const prev = remotePlayers[p.id] || { id: p.id, snake: [], dx: 1, dy: 0 };
+        if (!remotePlayers[p.id]) entrouNovoJogador = true;
+        const prev = remotePlayers[p.id] || {
+          id: p.id,
+          snake: [],
+          dx: 1,
+          dy: 0,
+          score: 0,
+          lastPacketTime: agora,
+          timedOut: false
+        };
+        const novoAlive = prev.timedOut
+          ? false
+          : (typeof p.alive === 'boolean' ? p.alive : (prev.alive !== false));
         remotePlayers[p.id] = {
           ...prev,
           id: p.id,
           joinedAt: p.joinedAt,
           slot: typeof p.slot === 'number' ? p.slot : prev.slot,
-          score: typeof p.score === 'number' ? p.score : (prev.score || 0),
-          alive: typeof p.alive === 'boolean' ? p.alive : (prev.alive !== false)
+          score: typeof prev.score === 'number' ? prev.score : 0,
+          alive: novoAlive,
+          lastPacketTime: prev.lastPacketTime || agora
         };
       });
 
-      // Verifica slots ocupados por OUTROS jogadores com prioridade maior (ou já estáveis)
       const slotsOcupadosPorOutros = new Set();
       todos.forEach(p => {
         if (p.id === playerId) return;
@@ -577,7 +610,6 @@
         }
       });
 
-      // Resolve conflito caso dois jogadores entrem ao mesmo tempo no mesmo slot
       const meuAntes = mySlot;
       const temConflitoComPrioridade = todos.some(p =>
         p.id !== playerId &&
@@ -597,7 +629,7 @@
       if (!inicializado) {
         inicializado = true;
         if (mySlot >= 1 && mySlot <= 3) {
-          reiniciarMinhaCobrinha(true);
+          reiniciarMinhaCobrinha(true, false);
         } else {
           myAlive = false;
           mySnake = [];
@@ -606,14 +638,15 @@
         }
         iniciarLoops();
       } else if (meuAntes === 0 && mySlot >= 1 && mySlot <= 3) {
-        // Espectador acabou de ganhar vaga livre -> entra como drop-in!
-        reiniciarMinhaCobrinha(true);
+        reiniciarMinhaCobrinha(true, false);
       } else {
         if (temConflitoComPrioridade && mySlot >= 1 && mySlot <= 3) {
-          transmitirEstadoCobrinha();
+          enviarMovimento();
         }
-        if (ehHost()) {
-          garantirMacas(true);
+        // Quando um novo jogador entra na sala, os jogadores ativos respondem enviando as maçãs atuais e seu estado
+        if (entrouNovoJogador) {
+          if (mySlot >= 1 && mySlot <= 3) enviarMovimento();
+          if (apples.length > 0) enviarFoodSync();
         }
         atualizarInterface();
       }
@@ -642,7 +675,6 @@
         ctx.arc(cx, cy, gridSize * 0.38, 0, Math.PI * 2);
         ctx.fill();
 
-        // Brilho e folhinha
         ctx.fillStyle = '#fca5a5';
         ctx.beginPath();
         ctx.arc(cx - 2.5, cy - 2.5, 2.2, 0, Math.PI * 2);
@@ -672,7 +704,6 @@
             ctx.fillRect(px, py, sz, sz);
           }
 
-          // Olhinhos na cabeça
           if (idx === 0) {
             ctx.fillStyle = '#111215';
             const vx = p.dx || 0;
@@ -689,7 +720,6 @@
           }
         });
 
-        // Tag discreta identificando J1/J2/J3 acima da cabeça
         const cabeca = p.snake[0];
         ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'center';
@@ -698,9 +728,53 @@
       });
     }
 
+    function atualizarJogadoresRemotosNoTick() {
+      const agora = Date.now();
+      let houveRemocao = false;
+
+      Object.keys(remotePlayers).forEach(id => {
+        const rp = remotePlayers[id];
+        if (!rp || rp.id === playerId) return;
+
+        const semRespostaHa = agora - (rp.lastPacketTime || agora);
+
+        // Remove jogador vivo inativo (aba minimizada/travada) após 4 segundos sem pacotes
+        if (rp.alive && semRespostaHa > INATIVIDADE_TIMEOUT_MS) {
+          delete remotePlayers[id];
+          houveRemocao = true;
+          return;
+        }
+
+        // Previsão inteligente sem rubber-banding: só prevê se atrasou > 190ms
+        if (rp.alive && Array.isArray(rp.snake) && rp.snake.length > 0 && semRespostaHa > DEAD_RECKONING_MS) {
+          const cabeca = rp.snake[0];
+          const nx = cabeca.x + (rp.dx || 0);
+          const ny = cabeca.y + (rp.dy || 0);
+          if (nx >= 0 && nx < tileCount && ny >= 0 && ny < tileCount) {
+            rp.snake.unshift({ x: nx, y: ny });
+            rp.snake.pop();
+          }
+        }
+      });
+
+      if (houveRemocao) {
+        atualizarInterface();
+      }
+    }
+
     function passoDoJogo() {
+      if (modoMultiplayer) {
+        atualizarJogadoresRemotosNoTick();
+      }
+
       if (mySlot >= 1 && mySlot <= 3 && myAlive && mySnake.length) {
-        mudouDirecao = false;
+        // 1. Consome a próxima direção da fila de comandos (Input Queue)
+        if (inputQueue.length > 0) {
+          const proximo = inputQueue.shift();
+          dx = proximo.dx;
+          dy = proximo.dy;
+        }
+
         const head = { x: mySnake[0].x + dx, y: mySnake[0].y + dy };
 
         // Colisão com bordas ou próprio corpo
@@ -712,7 +786,7 @@
         // Colisão com outras cobrinhas vivas
         if (!bateu) {
           for (const rp of Object.values(remotePlayers)) {
-            if (rp.id !== playerId && rp.alive && Array.isArray(rp.snake)) {
+            if (rp.id !== playerId && rp.alive && !rp.timedOut && Array.isArray(rp.snake)) {
               if (rp.snake.some(p => p.x === head.x && p.y === head.y)) {
                 bateu = true;
                 break;
@@ -724,76 +798,80 @@
         if (bateu) {
           myAlive = false;
           mySnake = [];
+          inputQueue = [];
           transmitirPresenca();
-          transmitirEstadoCobrinha();
+          enviarMovimento();
           atualizarInterface();
         } else {
           mySnake.unshift(head);
 
           const idxMaca = apples.findIndex(a => a.x === head.x && a.y === head.y);
           if (idxMaca !== -1) {
-            const comida = apples[idxMaca];
             myScore += 10;
             apples.splice(idxMaca, 1);
-
-            if (ehHost()) {
-              garantirMacas(true);
-            } else {
-              transmitirMacaComida(comida);
-            }
-            transmitirPresenca();
+            // 2. Sincronização descentralizada: quem come sorteia e transmite food_sync
+            preencherMacas(true);
             atualizarInterface();
           } else {
             mySnake.pop();
           }
 
-          transmitirEstadoCobrinha();
+          enviarMovimento();
         }
       }
 
-      if (ehHost()) {
-        garantirMacas(false);
+      if (apples.length < quantidadeAlvoMacas() && !modoMultiplayer) {
+        preencherMacas(false);
       }
+
       desenharArena();
     }
 
     function iniciarLoops() {
       if (jogoLoop) clearInterval(jogoLoop);
-      if (renderLoop) clearInterval(renderLoop);
-
       desenharArena();
-      jogoLoop = setInterval(passoDoJogo, 130);
-      // Mantém espectadores/eliminados com renderização fluida ao receber broadcasts
-      renderLoop = setInterval(() => {
-        if (!myAlive || mySlot === 0) desenharArena();
-      }, 65);
+      jogoLoop = setInterval(passoDoJogo, TICK_MS);
     }
 
-    // Remove qualquer ouvinte anterior para evitar duplicidade
     if (handlerTeclasJogo) window.removeEventListener('keydown', handlerTeclasJogo);
 
     handlerTeclasJogo = e => {
-      // TRAVA 1: Se o modal não estiver aberto, não faz nada
       if (!document.getElementById('modalSnake')) return;
-
-      // TRAVA 2: Se o usuário estiver num campo de texto / área editável, não intercepta teclas
       if (estaEditandoTexto(e.target)) return;
 
-      const k = (e.key || '').toLowerCase();
+      // Impede rolagem da página ao fundo com setas enquanto o modal estiver aberto
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+      }
 
       if (e.code === 'Space') {
         e.preventDefault();
-        // Só permite nova rodada quando todos estiverem eliminados
         solicitarReiniciarRodada();
         return;
       }
 
-      if (mySlot < 1 || mySlot > 3 || !myAlive || mudouDirecao) return;
+      if (mySlot < 1 || mySlot > 3 || !myAlive) return;
+      if (inputQueue.length >= 2) return;
 
-      if ((k === 'arrowup' || k === 'w') && dy === 0) { dx = 0; dy = -1; mudouDirecao = true; }
-      else if ((k === 'arrowdown' || k === 's') && dy === 0) { dx = 0; dy = 1; mudouDirecao = true; }
-      else if ((k === 'arrowleft' || k === 'a') && dx === 0) { dx = -1; dy = 0; mudouDirecao = true; }
-      else if ((k === 'arrowright' || k === 'd') && dx === 0) { dx = 1; dy = 0; mudouDirecao = true; }
+      const k = (e.key || '').toLowerCase();
+      let ndx = 0, ndy = 0, ehDirecao = false;
+
+      if (k === 'arrowup' || k === 'w') { ndx = 0; ndy = -1; ehDirecao = true; }
+      else if (k === 'arrowdown' || k === 's') { ndx = 0; ndy = 1; ehDirecao = true; }
+      else if (k === 'arrowleft' || k === 'a') { ndx = -1; ndy = 0; ehDirecao = true; }
+      else if (k === 'arrowright' || k === 'd') { ndx = 1; ndy = 0; ehDirecao = true; }
+
+      if (!ehDirecao) return;
+
+      // Valida contra a última direção pendente na fila (ou direção atual)
+      const ref = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
+      const ehInversao180 = (ndx === -ref.dx && ndy === -ref.dy);
+      const ehIgual = (ndx === ref.dx && ndy === ref.dy);
+      if (ehInversao180 || ehIgual) return;
+
+      inputQueue.push({ dx: ndx, dy: ndy });
+      // Envia Broadcast imediato com a próxima direção prevista
+      enviarMovimento(inputQueue[0]);
     };
 
     window.addEventListener('keydown', handlerTeclasJogo);
@@ -803,7 +881,7 @@
       modoMultiplayer = false;
       inicializado = true;
       mySlot = 1;
-      reiniciarMinhaCobrinha(true);
+      reiniciarMinhaCobrinha(true, true);
       iniciarLoops();
     }
 
@@ -812,7 +890,6 @@
       return;
     }
 
-    // Fallback automático para modo solo caso o Realtime não conecte a tempo
     fallbackTimer = setTimeout(() => {
       if (!inicializado) {
         if (snakeChannel) {
@@ -841,11 +918,6 @@
             newPresences.forEach(p => { if (p && p.id) leftIds.delete(p.id); });
           }
           sincronizarPresenca();
-          // Envia snapshot atual para o recém-chegado (drop-in)
-          if (inicializado) {
-            if (mySlot >= 1 && mySlot <= 3) transmitirEstadoCobrinha();
-            if (ehHost()) transmitirMacas();
-          }
         })
         .on('presence', { event: 'leave' }, ({ leftPresences }) => {
           if (Array.isArray(leftPresences)) {
@@ -853,43 +925,46 @@
           }
           sincronizarPresenca();
         })
-        .on('broadcast', { event: 'snake_state' }, msg => {
+        .on('broadcast', { event: 'move' }, msg => {
           const p = msg && msg.payload;
           if (!p || p.id === playerId || leftIds.has(p.id)) return;
+          const prev = remotePlayers[p.id] || {};
           remotePlayers[p.id] = {
+            ...prev,
             id: p.id,
             slot: p.slot,
-            joinedAt: p.joinedAt || Date.now(),
+            joinedAt: prev.joinedAt || Date.now(),
             score: p.score || 0,
             alive: !!p.alive,
-            snake: Array.isArray(p.snake) ? p.snake : [],
+            snake: Array.isArray(p.snake) ? p.snake.map(s => ({ x: s.x, y: s.y })) : [],
             dx: p.dx ?? 1,
-            dy: p.dy ?? 0
+            dy: p.dy ?? 0,
+            ts: p.ts || Date.now(),
+            lastPacketTime: Date.now(),
+            timedOut: false
           };
           atualizarInterface();
           if (!myAlive || mySlot === 0) desenharArena();
         })
-        .on('broadcast', { event: 'apples_sync' }, msg => {
+        .on('broadcast', { event: 'food_sync' }, msg => {
           const p = msg && msg.payload;
           if (!p || !Array.isArray(p.apples)) return;
-          // Aceita atualização do host dinâmico atual
-          if (p.hostId === obterHostId() || !ehHost()) {
-            apples = p.apples.map(a => ({ x: a.x, y: a.y }));
-            if (!myAlive || mySlot === 0) desenharArena();
+          if (appleFallbackTimer) {
+            clearTimeout(appleFallbackTimer);
+            appleFallbackTimer = null;
           }
-        })
-        .on('broadcast', { event: 'apple_eaten' }, msg => {
-          const p = msg && msg.payload;
-          if (!p || p.by === playerId) return;
-          const idx = apples.findIndex(a => a.x === p.x && a.y === p.y);
-          if (idx !== -1) apples.splice(idx, 1);
-          if (ehHost()) {
-            garantirMacas(true);
-          }
+          apples = p.apples.map(a => ({ x: a.x, y: a.y }));
+          if (!myAlive || mySlot === 0) desenharArena();
         })
         .on('broadcast', { event: 'reset_all' }, () => {
+          const agora = Date.now();
+          apples = [];
+          Object.values(remotePlayers).forEach(rp => {
+            rp.timedOut = false;
+            rp.lastPacketTime = agora;
+          });
           if (mySlot >= 1 && mySlot <= 3) {
-            reiniciarMinhaCobrinha(true);
+            reiniciarMinhaCobrinha(true, false);
           } else {
             atualizarInterface();
           }
@@ -900,7 +975,6 @@
               clearTimeout(fallbackTimer);
               fallbackTimer = null;
             }
-            // Define slot provisório com base na presença atual antes do track inicial
             const st = snakeChannel.presenceState() || {};
             const ocupados = new Set();
             Object.values(st).forEach(arr => {
@@ -914,7 +988,6 @@
               id: playerId,
               joinedAt: myJoinedAt,
               slot: mySlot,
-              score: 0,
               alive: mySlot >= 1
             });
             sincronizarPresenca();
