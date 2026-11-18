@@ -503,6 +503,7 @@ function cardFilaMateriais() {
       <div class="fx" style="margin-top:10px;">
         <button class="b p" data-act="copiar_fila">📋 Copiar Mensagem Pronta</button>
         <a href="${linkWhatsApp}" target="_blank" class="b p" style="text-decoration:none; display:inline-flex; align-items:center; background:#25d366; border-color:#25d366; color:#fff;">🚀 Enviar no WhatsApp</a>
+        <button class="b p" data-act="concluir_fila_materiais">✅ Concluir Envio e Baixar Pendências</button>
         <button class="b danger" data-act="limpar_fila">Limpar Fila</button>
       </div>
     `;
@@ -560,6 +561,9 @@ function viewAulas() {
             ${f('desc', 'Descrição / Conteúdo')}
           </div>
         </div>
+        <label class="pill ${a.materialPronto ? 'o' : 'w'}" title="Marcar material (slide) como enviado">
+          <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''}> 📦 Slide
+        </label>
         <button class="b" data-act="del_aula" data-id="${a.id}">Excluir</button>
       </div>
     `;

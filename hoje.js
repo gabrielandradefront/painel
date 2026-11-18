@@ -28,7 +28,9 @@ function viewHoje() {
     const condicaoPrazo = proximaDataEntrega <= hoje 
       ? a => prazoEntregaMaterial(a.dia) <= hoje 
       : a => prazoEntregaMaterial(a.dia) === proximaDataEntrega;
-    matsEnvio = S.aulas.filter(a => a.dia >= hoje && condicaoPrazo(a) && (!a.materialPronto || a.materialConcluidoEm === hoje));
+    matsEnvio = S.aulas.filter(a => a.dia >= hoje && ((condicaoPrazo(a) && !a.materialPronto) || a.materialConcluidoEm === hoje));
+  } else {
+    matsEnvio = S.aulas.filter(a => a.dia >= hoje && a.materialConcluidoEm === hoje);
   }
 
   matsEnvio.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
@@ -37,7 +39,8 @@ function viewHoje() {
 
   // Linhas resumidas limpas
   const matRowHoje = a => `
-    <div class="row" style="align-items: center; padding: 6px 8px;">
+    <div class="row ${a.materialPronto ? 'done' : ''}" style="align-items: center; padding: 6px 8px;">
+      <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''} title="Marcar material como enviado">
       <div class="t">
         <b>${esc(a.turma)}${a.desc ? ' — ' + esc(a.desc) : ''}</b>
         <span class="mu">Aula: <b>${wd(a.dia)} ${br(a.dia)}</b>${a.hora ? ' às ' + esc(a.hora) : ''} • Prof: ${esc(a.prof || 'A definir')}</span>

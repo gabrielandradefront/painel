@@ -384,7 +384,9 @@ function views() {
       const condicaoPrazo = proximaDataEntrega <= hoje 
         ? a => prazoEntregaMaterial(a.dia) <= hoje 
         : a => prazoEntregaMaterial(a.dia) === proximaDataEntrega;
-      matsEnvio = S.aulas.filter(a => a.dia >= hoje && condicaoPrazo(a) && (!a.materialPronto || a.materialConcluidoEm === hoje));
+      matsEnvio = S.aulas.filter(a => a.dia >= hoje && ((condicaoPrazo(a) && !a.materialPronto) || a.materialConcluidoEm === hoje));
+    } else {
+      matsEnvio = S.aulas.filter(a => a.dia >= hoje && a.materialConcluidoEm === hoje);
     }
 
     matsEnvio.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
@@ -392,7 +394,8 @@ function views() {
     const alertaVolume = matsEnvioPendentes.length >= 4;
 
     const matRowHoje = a => `
-      <div class="row" style="align-items: center; padding: 6px 8px;">
+      <div class="row ${a.materialPronto ? 'done' : ''}" style="align-items: center; padding: 6px 8px;">
+        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''} title="Marcar material como enviado">
         <div class="t">
           <b>${esc(a.turma)}${a.desc ? ' — ' + esc(a.desc) : ''}</b>
           <span class="mu">Aula: <b>${wd(a.dia)} ${br(a.dia)}</b>${a.hora ? ' às ' + esc(a.hora) : ''} • Prof: ${esc(a.prof || 'A definir')}</span>
@@ -1178,6 +1181,28 @@ document.addEventListener('click', async e => {
 
   if (a === 'del_fila') { S.filaMateriais.splice(+t.dataset.i, 1); save(); render(); toast('Removido da fila'); }
   if (a === 'limpar_fila') { S.filaMateriais = []; save(); render(); toast('Fila limpa'); }
+  if (a === 'concluir_fila_materiais') {
+    const fila = S.filaMateriais || [];
+    if (!fila.length) return toast('A fila de materiais já está vazia.');
+    let baixadas = 0;
+    fila.forEach(item => {
+      const proximaAula = S.aulas
+        .filter(au => au.dia >= hoje && !au.materialPronto && norm(au.turma) === norm(item.turma))
+        .sort((p, q) => (p.dia + (p.hora || '')).localeCompare(q.dia + (q.hora || '')))[0];
+      if (proximaAula) {
+        proximaAula.materialPronto = true;
+        proximaAula.materialConcluidoEm = hoje;
+        baixadas++;
+      }
+    });
+    S.filaMateriais = [];
+    save();
+    render();
+    toast(baixadas > 0
+      ? `✅ Envio concluído! ${baixadas} pendência(s) de material baixada(s).`
+      : '✅ Fila concluída e limpa! Nenhuma pendência futura encontrada para as turmas da fila.');
+    return;
+  }
   if (a === 'copiar_fila') {
     const txt = S.filaMateriais.map(item => `${item.turma}\n${item.caminho}`).join('\n\n');
     copy(txt);
