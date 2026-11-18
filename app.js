@@ -951,11 +951,6 @@ document.addEventListener('click', async e => {
       toast(`Resumo ${rotulo} carregado e copiado!`);
     }
     render();
-
-    // Gerar planilha formatada (.xlsx) automaticamente para 3 ou 4 semanas
-    if ((tipo === '3' || tipo === '4') && typeof baixarPlanilhaResumo === 'function') {
-      await baixarPlanilhaResumo(tipo);
-    }
     return;
   }
 
