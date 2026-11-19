@@ -76,7 +76,7 @@ const ORC_ST = [
 
 // Abas principais
 const TABS = [
-  ['hoje', 'Hoje'],
+  ['hoje', 'Controle'],
   ['aulas', 'Aulas'],
   ['semana', 'Operações'],
   ['orc', 'Orçamento']
