@@ -405,7 +405,8 @@ function views() {
     `;
 
     const confRowHoje = a => `
-      <div class="row" style="padding: 6px 8px;">
+      <div class="row ${a.confirmada ? 'done' : ''}" style="align-items: center; padding: 6px 8px;">
+        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} title="Confirmar aula">
         <div class="t">
           <b>${esc(a.prof || 'Sem professor')} — ${esc(a.turma)}</b>
           <span class="mu">${wd(a.dia)} ${br(a.dia)}${a.hora ? ' às ' + esc(a.hora) : ''}${a.desc ? ' — ' + esc(a.desc) : ''}</span>
