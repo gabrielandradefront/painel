@@ -280,12 +280,19 @@ function normalizarEstado(raw) {
   obj.docs = obj.docs || {};
   obj.cat = obj.cat || {};
   obj.meta = obj.meta || {};
-  obj.orc = (obj.orc && typeof obj.orc === 'object') ? obj.orc : { inst: 'Prius', titulo: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
+  obj.orc = (obj.orc && typeof obj.orc === 'object') ? obj.orc : { inst: 'Prius', modo: 'comparativo_fornecedores', titulo: '', fornecedor: '', link: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
+  obj.orc.modo = obj.orc.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
+  if (typeof obj.orc.fornecedor !== 'string') obj.orc.fornecedor = '';
+  if (typeof obj.orc.link !== 'string') obj.orc.link = '';
   if (!Array.isArray(obj.orc.itens)) obj.orc.itens = [];
 
   obj.orc.itens.forEach(i => {
     if (!i.status) i.status = 'Aguardando aprovação';
     if (i.status === 'Pedido') i.status = 'Pedido feito';
+  });
+
+  obj.orcHist.forEach(h => {
+    if (h.modo !== 'pedido_fornecedor') h.modo = 'comparativo_fornecedores';
   });
 
   obj.reparos.forEach(r => {
@@ -324,6 +331,9 @@ let subTabAulas = 'quadro';
 let subTabSemana = 'docs';
 let orcSlideAtivo = 0; // 0 = Slide 1 (Dados e Tabela), 1 = Slide 2 (Gráficos)
 let prodFiltroHist = '';
+let cotacaoBaseComparacao = null;
+let orcFornHistorico = '';
+let orcItemHistorico = '';
 
 let modoEntradaCronograma = 'pdf'; // 'pdf', 'texto', 'novo'
 let novaTurmaManualNome = '';
@@ -573,7 +583,12 @@ const num = v => {
 };
 const itemPrecoSemFrete = i => (i.precoSemFrete !== undefined && i.precoSemFrete !== '') ? num(i.precoSemFrete) : (i.preco ? num(i.preco) : 0);
 const itemFrete = i => (i.frete !== undefined && i.frete !== '') ? num(i.frete) : 0;
-const itemTotal = i => itemPrecoSemFrete(i) + itemFrete(i);
+const itemTotal = i => {
+  if (i && i.qtd !== undefined && i.qtd !== '' && i.valorUnd !== undefined && i.valorUnd !== '' && (i.precoSemFrete === undefined || i.precoSemFrete === '') && !i.preco) {
+    return Math.max(0, num(i.qtd)) * num(i.valorUnd);
+  }
+  return itemPrecoSemFrete(i) + itemFrete(i);
+};
 
 // Notificações e utilitários de interface
 function toast(m) {

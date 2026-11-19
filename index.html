@@ -10,12 +10,21 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="apple-touch-icon" href="favicon.svg">
   <meta name="theme-color" content="#121316">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800;900&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
     <div class="top">
-      <h1>Painel Prius</h1>
+      <div class="brand-badge-tech" id="appBrandTitle" role="heading" aria-level="1">
+        <span class="brand-painel">PAINEL</span>
+        <div class="brand-prius-badge">
+          PRIUS
+          <span class="brand-live-indicator">LIVE</span>
+        </div>
+      </div>
       <div class="top-search-group">
         <select id="filtroTipoGlobal" class="top-filter-select" title="Filtrar por tipo" aria-label="Filtrar painel por tipo">
           <option value="todos">Todos os tipos</option>
@@ -49,5 +58,6 @@
   <script src="hoje.js"></script>
   <script src="app.js"></script>
   <script src="snake.js"></script>
+  <script type="module" src="/src/recharts-bridge.js"></script>
 </body>
 </html>

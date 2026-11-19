@@ -139,6 +139,88 @@ h3 {
 }
 
 /* ========================================================
+   IDENTIDADE VISUAL: LOGO BADGE TECH (PAINEL PRIUS LIVE)
+======================================================== */
+.brand-badge-tech {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border-radius: 8px;
+  transition: transform 0.15s ease;
+}
+
+.brand-badge-tech:active {
+  transform: scale(0.985);
+}
+
+.brand-painel {
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: 1px;
+  color: var(--tx);
+  line-height: 1;
+}
+
+.brand-prius-badge {
+  font-weight: 800;
+  font-size: 1.4rem;
+  letter-spacing: 1px;
+  color: #fbbf24;
+  background: rgba(217, 119, 6, 0.1);
+  border: 1.5px solid #d97706;
+  border-radius: 6px;
+  padding: 3px 12px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.05;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.brand-badge-tech:hover .brand-prius-badge {
+  background: rgba(217, 119, 6, 0.16);
+  box-shadow: 0 0 12px rgba(217, 119, 6, 0.22);
+}
+
+.brand-live-indicator {
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  background: #d97706;
+  color: #000;
+  font-size: 0.55rem;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+:root[data-theme="light"] .brand-prius-badge,
+body.light .brand-prius-badge {
+  background: rgba(217, 119, 6, 0.15);
+  border-color: #b45309;
+  color: #b45309;
+}
+
+:root[data-theme="light"] .brand-badge-tech:hover .brand-prius-badge,
+body.light .brand-badge-tech:hover .brand-prius-badge {
+  background: rgba(217, 119, 6, 0.22);
+  box-shadow: 0 0 10px rgba(180, 83, 9, 0.18);
+}
+
+:root[data-theme="light"] .brand-live-indicator,
+body.light .brand-live-indicator {
+  background: #b45309;
+  color: #ffffff;
+}
+
+/* ========================================================
    BARRA DE PESQUISA SUPERIOR COM SELETOR DE CATEGORIA
 ======================================================== */
 .top-search-group {
@@ -955,6 +1037,15 @@ b[id^="ot-"], .stat b, .drawer-item-text .time {
 @media (max-width: 480px) {
   h1 {
     font-size: 18px;
+  }
+
+  .brand-painel,
+  .brand-prius-badge {
+    font-size: 1.15rem;
+  }
+
+  .brand-prius-badge {
+    padding: 3px 10px;
   }
 
   .grid {
@@ -1870,3 +1961,403 @@ button.b.nav-arrow-btn {
   color: #92400e;
   border-color: #fcd34d;
 }
+
+/* ========================================================
+   ORÇAMENTO: SELETOR DE MODO, COMPARAÇÃO & CARDS ARQUIVADOS
+======================================================== */
+.orc-mode-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 5px;
+  background: var(--card-sub);
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+}
+
+.orc-mode-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mu);
+  border-radius: 9px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: all 0.18s ease;
+  font-family: inherit;
+}
+
+.orc-mode-btn:hover {
+  color: var(--tx);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.orc-mode-btn.active {
+  background: var(--card);
+  color: var(--tx);
+  border-color: var(--ac);
+  box-shadow: 0 2px 10px var(--ac-glow);
+}
+
+.orc-mode-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
+}
+
+.orc-mode-btn.active .orc-mode-title {
+  color: var(--ac);
+}
+
+.orc-mode-sub {
+  font-size: 11.5px;
+  color: var(--mu);
+  line-height: 1.3;
+}
+
+@media (max-width: 640px) {
+  .orc-mode-switcher {
+    grid-template-columns: 1fr;
+  }
+}
+
+.orc-pedido-total-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--card-sub);
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+}
+
+.orc-pedido-total-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ac);
+  font-variant-numeric: tabular-nums;
+}
+
+.orc-cmp-slot {
+  margin-top: 4px;
+  min-height: 0;
+}
+
+.orc-cmp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.orc-cmp-badge.alta {
+  background: var(--er-light);
+  color: var(--er);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.orc-cmp-badge.baixa {
+  background: var(--ok-light);
+  color: var(--ok);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.orc-cmp-badge.igual {
+  background: var(--card-sub);
+  color: var(--mu);
+  border-color: var(--bd);
+}
+
+.orc-cmp-badge.novo {
+  background: var(--ac-light);
+  color: var(--ac);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.orc-cmp-summary {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--card-sub);
+  border: 1px dashed var(--ac);
+  border-radius: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.orc-cmp-summary-text {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--tx);
+  font-variant-numeric: tabular-nums;
+}
+
+.orc-cmp-arrow, .orc-cmp-sep {
+  color: var(--mu);
+}
+
+.orc-cmp-diff.alta { color: var(--er); }
+.orc-cmp-diff.baixa { color: var(--ok); }
+.orc-cmp-diff.igual { color: var(--mu); }
+
+.orc-cmp-clear {
+  font-size: 11.5px;
+  padding: 4px 9px;
+}
+
+.orc-hist-card {
+  border: 1px solid var(--bd);
+  background: var(--card-sub);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.orc-hist-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.orc-hist-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.orc-hist-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.orc-hist-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+}
+
+.orc-hist-tag.multi {
+  background: var(--ac-light);
+  color: var(--ac);
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.orc-hist-tag.pedido {
+  background: var(--ok-light);
+  color: var(--ok);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+.orc-hist-itens {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--bd);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.orc-hist-itens li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--tx);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="light"] .orc-mode-switcher {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+:root[data-theme="light"] .orc-mode-btn:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme="light"] .orc-mode-btn.active {
+  background: #ffffff;
+  border-color: #d97706;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.14);
+}
+
+:root[data-theme="light"] .orc-mode-btn.active .orc-mode-title {
+  color: #b45309;
+}
+
+:root[data-theme="light"] .orc-cmp-badge.alta {
+  background: #ffe4e6;
+  color: #be123c;
+  border-color: #fda4af;
+}
+
+:root[data-theme="light"] .orc-cmp-badge.baixa {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+:root[data-theme="light"] .orc-cmp-badge.novo {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fcd34d;
+}
+
+:root[data-theme="light"] .orc-hist-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:root[data-theme="light"] .orc-hist-tag.multi {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fcd34d;
+}
+
+:root[data-theme="light"] .orc-hist-tag.pedido {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+/* ========================================================
+   ORÇAMENTO: GRÁFICO DE HISTÓRICO DO FORNECEDOR (RECHARTS)
+======================================================== */
+.orc-recharts-card {
+  margin-top: 14px;
+  border-top: 2px solid rgba(245, 158, 11, 0.35);
+}
+
+.orc-recharts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.orc-recharts-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.orc-recharts-kpis {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.orc-recharts-kpi {
+  background: var(--card-sub);
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 112px;
+}
+
+.orc-recharts-kpi span {
+  font-size: 10.5px;
+  color: var(--mu);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.orc-recharts-kpi b {
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx);
+}
+
+.orc-recharts-box {
+  width: 100%;
+  height: 250px;
+  background: var(--card-sub);
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  padding: 10px 10px 6px 2px;
+  box-sizing: border-box;
+}
+
+.orc-recharts-tooltip {
+  background: var(--card);
+  border: 1px solid var(--ac);
+  border-radius: 9px;
+  padding: 8px 11px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  color: var(--tx);
+  font-variant-numeric: tabular-nums;
+}
+
+.orc-recharts-tooltip-date {
+  font-weight: 700;
+  color: var(--ac);
+  margin-bottom: 3px;
+}
+
+.orc-recharts-tooltip-price {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--tx);
+}
+
+.orc-recharts-tooltip-meta {
+  font-size: 11px;
+  color: var(--mu);
+  margin-top: 2px;
+}
+
+:root[data-theme="light"] .orc-recharts-box {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:root[data-theme="light"] .orc-recharts-kpi {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:root[data-theme="light"] .orc-recharts-tooltip {
+  background: #ffffff;
+  border-color: #d97706;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+

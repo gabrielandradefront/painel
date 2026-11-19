@@ -579,6 +579,12 @@ function render() {
   
   vEl.innerHTML = views();
 
+  if (tab === 'orc' && typeof montarGraficoRechartsOrc === 'function') {
+    montarGraficoRechartsOrc();
+  } else if (window.PriusRecharts && typeof window.PriusRecharts.unmount === 'function') {
+    window.PriusRecharts.unmount();
+  }
+
   let drawerCont = document.getElementById('drawerContainer');
   if (!drawerCont && document.body) {
     drawerCont = document.createElement('div');
@@ -1003,6 +1009,25 @@ document.addEventListener('click', async e => {
     return;
   }
 
+  if (a === 'encurtar_link_pedido') {
+    const inp = document.getElementById('orc_linkFornecedor');
+    if (!inp || !inp.value.trim()) return toast('Cole o link de compra primeiro.');
+    t.disabled = true;
+    t.textContent = '⏳ Encurtando...';
+    if (typeof encurtarUrlAmigavel === 'function') {
+      const urlEncurtada = await encurtarUrlAmigavel(inp.value);
+      inp.value = urlEncurtada;
+      S.orc.link = urlEncurtada;
+      save();
+      render();
+      toast('Link higienizado!');
+    } else {
+      t.disabled = false;
+      t.textContent = '✂️ Encurtar';
+    }
+    return;
+  }
+
   if (a === 'remover_img_conv') {
     const idx = +t.dataset.i;
     if (typeof arquivosConversor !== 'undefined' && arquivosConversor[idx]) {
@@ -1226,39 +1251,100 @@ document.addEventListener('click', async e => {
 
   if (a === 'repf') { repFiltro = t.dataset.v; render(); }
 
+  if (a === 'orc_set_modo') {
+    const novoModo = t.dataset.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
+    if (S.orc.modo !== novoModo) {
+      S.orc.modo = novoModo;
+      if (cotacaoBaseComparacao && cotacaoBaseComparacao.modo !== novoModo) {
+        cotacaoBaseComparacao = null;
+      }
+      save();
+      render();
+    }
+    return;
+  }
+  if (a === 'orc_limpar_comparacao') {
+    cotacaoBaseComparacao = null;
+    render();
+    toast('Comparação de preços removida.');
+    return;
+  }
+  if (a === 'orc_ver_hist_forn') {
+    const forn = (t.dataset.forn || '').trim();
+    if (!forn) return;
+    orcFornHistorico = forn;
+    orcItemHistorico = norm(S.orc.titulo || '');
+    orcSlideAtivo = 0;
+    render();
+    requestAnimationFrame(() => {
+      const cardEl = document.getElementById('orcRechartsCard');
+      if (cardEl && typeof cardEl.scrollIntoView === 'function') {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+    return;
+  }
+  if (a === 'orc_fechar_hist_forn') {
+    orcFornHistorico = '';
+    render();
+    return;
+  }
   if (a === 'orcxlsx') if (typeof orcXlsx === 'function') orcXlsx();
   if (a === 'orccopy') if (typeof orcCopy === 'function') orcCopy();
   if (a === 'orcsalvarhist') {
-    if (!S.orc.itens.length) return toast('Adicione fornecedores antes de arquivar');
+    const modoAtual = typeof orcModo === 'function' ? orcModo(S.orc) : (S.orc.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores');
+    if (!S.orc.itens.length) return toast(modoAtual === 'pedido_fornecedor' ? 'Adicione itens ao pedido antes de arquivar' : 'Adicione fornecedores antes de arquivar');
+    const tituloPadrao = modoAtual === 'pedido_fornecedor'
+      ? (S.orc.fornecedor ? `Pedido — ${S.orc.fornecedor}` : 'Pedido Único')
+      : 'Cotação';
     S.orcHist.unshift({ 
       id: uid(), 
+      modo: modoAtual,
       data: S.orc.data || hoje, 
-      titulo: S.orc.titulo || 'Cotação', 
+      titulo: (S.orc.titulo || '').trim() || tituloPadrao, 
+      fornecedor: (S.orc.fornecedor || '').trim(),
+      link: (S.orc.link || '').trim(),
+      qtdTotal: S.orc.qtdTotal || '',
       qtdItens: S.orc.itens.length, 
       obs: S.orc.obs || '',
       itens: JSON.parse(JSON.stringify(S.orc.itens)) 
     });
+    cotacaoBaseComparacao = null;
     save(); render(); toast('Cotação arquivada no histórico!');
   }
   if (a === 'orc_carregar_hist') {
     const h = (S.orcHist || []).find(x => x.id === id);
-    if (h && confirm(`Carregar a cotação "${h.titulo}"? Os dados atuais da tela serão substituídos.`)) {
+    if (h && confirm(`Carregar "${h.titulo || h.fornecedor || 'Cotação'}" na tela?\nOs dados atuais serão substituídos e a comparação de preços será ativada.`)) {
+      const modoHist = h.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
       S.orc = { 
-        inst: S.orc.inst || 'Prius', 
+        inst: S.orc.inst || 'Prius',
+        modo: modoHist,
         titulo: h.titulo || '', 
+        fornecedor: h.fornecedor || '',
+        link: h.link || '',
         solic: h.solic || '', 
-        data: h.data || hoje, 
+        data: hoje, 
         obs: h.obs || '', 
         qtdTotal: h.qtdTotal || '',
         itens: JSON.parse(JSON.stringify(h.itens || [])) 
       };
-      save(); render(); toast('Cotação carregada com sucesso!');
+      cotacaoBaseComparacao = typeof orcCriarBaseComparacao === 'function'
+        ? orcCriarBaseComparacao(h)
+        : null;
+      orcFornHistorico = '';
+      orcItemHistorico = '';
+      orcSlideAtivo = 0;
+      save(); render(); toast('📊 Pedido carregado com comparação de reajuste ativa!');
     }
   }
   if (a === 'orcnovo') {
-    if (!orcAsk) { orcAsk = true; t.textContent = 'Confirmar limpeza?'; setTimeout(() => { orcAsk = false; if (t.isConnected) t.textContent = '🧹 Limpar Orçamento'; }, 3000); return; }
-    orcAsk = false; 
-    S.orc = { inst: S.orc.inst, titulo: '', solic: S.orc.solic, data: hoje, obs: '', qtdTotal: '', itens: [] }; 
+    if (!orcAsk) { orcAsk = true; t.textContent = 'Confirmar limpeza?'; setTimeout(() => { orcAsk = false; if (t.isConnected) t.textContent = '🧹 Limpar'; }, 3000); return; }
+    orcAsk = false;
+    const modoAtual = typeof orcModo === 'function' ? orcModo(S.orc) : 'comparativo_fornecedores';
+    S.orc = { inst: S.orc.inst, modo: modoAtual, titulo: '', fornecedor: '', link: '', solic: S.orc.solic, data: hoje, obs: '', qtdTotal: '', itens: [] }; 
+    cotacaoBaseComparacao = null;
+    orcFornHistorico = '';
+    orcItemHistorico = '';
     save(); render(); toast('Orçamento limpo para nova cotação!');
   }
 
@@ -1363,9 +1449,15 @@ document.addEventListener('change', async e => {
     } catch (err) { msg = 'Erro ao ler o PDF.'; render(); } finally { t.value = ''; }
   }
   if (t.id === 'filtroProdGraf') { prodFiltroHist = t.value; render(); }
+  if (t.id === 'orcFornecedorItemGraf') { orcItemHistorico = t.value; render(); }
   if (t.id === 'dest' && pend) { dest = t.value; if (typeof montar === 'function') montar(); render(); }
   if (t.id === 'nomeNovo' && pend) { nomeNovo = t.value; if (typeof montar === 'function') montar(); render(); }
-  if (t.dataset.orc) { S.orc[t.dataset.orc] = t.value; save(); }
+  if (t.dataset.orc) {
+    S.orc[t.dataset.orc] = t.value;
+    save();
+    if (t.dataset.orc === 'qtdTotal' && typeof orcTotals === 'function') orcTotals();
+    if (t.dataset.orc === 'link' || t.dataset.orc === 'fornecedor' || t.dataset.orc === 'data') render();
+  }
 });
 
 // SUBMIT: Bloqueia recarregamento indevido de página
@@ -1463,6 +1555,26 @@ document.addEventListener('submit', e => {
     });
     if (forn && !S.fornecedores.includes(forn)) S.fornecedores.push(forn);
     toast('Fornecedor adicionado à cotação!');
+  }
+
+  if (f === 'orc_pedido_item') {
+    const nome = (d.nome || '').trim();
+    if (!nome) return toast('Informe o nome do item.');
+    S.orc.itens.push({
+      id,
+      nome,
+      qtd: (d.qtd || '1').trim(),
+      valorUnd: (d.valorUnd || '0').trim(),
+      status: 'Aguardando aprovação'
+    });
+    save();
+    render();
+    toast('Item adicionado ao pedido!');
+    setTimeout(() => {
+      const inp = document.getElementById('ped_nomeItem');
+      if (inp) inp.focus();
+    }, 30);
+    return;
   }
 
   if (f === 'apelido') {

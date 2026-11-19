@@ -40,9 +40,9 @@
       }
     });
 
-    // 2. Escuta de 5 cliques rápidos no título
+    // 2. Escuta de 5 cliques rápidos no título / logo Badge Tech
     document.addEventListener('click', e => {
-      const el = e.target.closest('h1, .top h1, [data-brand]');
+      const el = e.target.closest('#appBrandTitle, .brand-badge-tech, h1, .top h1, [data-brand]');
       if (!el) return;
 
       easterEggClicks++;
