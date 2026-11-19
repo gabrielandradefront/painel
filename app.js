@@ -6,7 +6,7 @@
 // --- BACKUP E RESTAURAÇÃO ---
 async function salvarArquivo(nome, dados, tipo) {
   try {
-    const dl = (window.claude && claude.use) ? await claude.use('downloads') : null;
+    const dl = (window.claude && typeof window.claude.use === 'function') ? await window.claude.use('downloads') : null;
     if (dl) { await dl.save({ filename: nome, data: dados }); return true; }
   } catch (e) {
     if (e && e.code === 'declined') return false;
@@ -34,11 +34,7 @@ function processarRestauracao(arquivo) {
       if (!dados || typeof dados !== 'object' || (!dados.aulas && !dados.reparos)) return alert('Backup inválido.');
       if (!confirm('ATENÇÃO: Deseja restaurar este backup?\nUma cópia de segurança automática será guardada antes de prosseguir.')) return;
       localStorage.setItem(KEY + '-snapshot-emergencia', JSON.stringify({ data: new Date().toISOString(), dados: S }));
-      S = dados; 
-      ['aulas', 'reparos', 'hist', 'orcHist', 'fornecedores', 'apelidos', 'filaMateriais', 'lembretes'].forEach(k => { if (!Array.isArray(S[k])) S[k] = []; }); 
-      S.docs = S.docs || {}; 
-      S.cat = S.cat || {}; 
-      S.meta = S.meta || {}; 
+      S = normalizarEstado(dados);
       S.meta.ultimaRestauracao = new Date().toISOString();
       save(); 
       render(); 
@@ -54,7 +50,7 @@ function reverterSnapshot() {
     if (!raw) return alert('Sem cópia anterior.');
     const snap = JSON.parse(raw);
     if (confirm(`Restaurar cópia gerada em ${new Date(snap.data).toLocaleString('pt-BR')}?`)) { 
-      S = snap.dados; 
+      S = normalizarEstado(snap.dados);
       save(); 
       render(); 
       alert('Restauração desfeita com sucesso!'); 
@@ -130,7 +126,8 @@ function viewConfig() {
 
   const ultBackup = S.meta && S.meta.ultimoBackup ? new Date(S.meta.ultimoBackup).toLocaleString('pt-BR') : 'Sem registo recente';
   const ultRest = S.meta && S.meta.ultimaRestauracao ? new Date(S.meta.ultimaRestauracao).toLocaleString('pt-BR') : 'Sem restauração recente';
-  const snapRaw = localStorage.getItem(KEY + '-snapshot-emergencia');
+  let snapRaw = null;
+  try { snapRaw = localStorage.getItem(KEY + '-snapshot-emergencia'); } catch (e) {}
   let snapTxt = ''; 
   if (snapRaw) { try { snapTxt = new Date(JSON.parse(snapRaw).data).toLocaleString('pt-BR'); } catch (e) {} }
 
@@ -1359,13 +1356,13 @@ document.addEventListener('change', async e => {
     const f = t.files[0];
     try {
       if (!window.pdfjsLib) { msg = 'Leitor de PDF não carregou.'; return render(); }
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const P = await pdfItems(await f.arrayBuffer());
       if (!P.some(p => p.length)) { msg = 'O PDF não tem texto.'; return render(); }
       if (typeof startPdf === 'function') startPdf(P, turmaPad.trim() || turmaDoNome(f.name), f.name);
     } catch (err) { msg = 'Erro ao ler o PDF.'; render(); } finally { t.value = ''; }
   }
-  if (t.id === 'filtroProdGraf') { typeof window !== 'undefined' && (window.prodFiltroHist = t.value); render(); }
+  if (t.id === 'filtroProdGraf') { prodFiltroHist = t.value; render(); }
   if (t.id === 'dest' && pend) { dest = t.value; if (typeof montar === 'function') montar(); render(); }
   if (t.id === 'nomeNovo' && pend) { nomeNovo = t.value; if (typeof montar === 'function') montar(); render(); }
   if (t.dataset.orc) { S.orc[t.dataset.orc] = t.value; save(); }
@@ -1486,9 +1483,34 @@ document.addEventListener('submit', e => {
   save(); render(); e.target.reset();
 });
 
-// --- INICIALIZAÇÃO SEGURA DO DOM ---
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', render);
-} else {
+// --- INICIALIZAÇÃO CONTROLADA PELA ÁRVORE DE DEPENDÊNCIAS (PRIUS BUS) ---
+let painelInicializado = false;
+function inicializarPainel() {
+  if (painelInicializado) return;
+  painelInicializado = true;
   render();
+  if (typeof iniciarSupabase === 'function') {
+    iniciarSupabase();
+  }
+}
+
+if (typeof PriusBus !== 'undefined') {
+  PriusBus.register(
+    'app',
+    ['core', 'orcamento', 'operacional', 'aulas', 'hoje'],
+    inicializarPainel,
+    { dom: true }
+  );
+
+  // Fallback de segurança caso algum módulo opcional falhe no carregamento de rede
+  setTimeout(() => {
+    if (!painelInicializado && PriusBus.isReady('core', { dom: true })) {
+      console.warn('[PriusBus] Inicialização por fallback; módulos pendentes:', PriusBus.getPendingModules());
+      inicializarPainel();
+    }
+  }, 3000);
+} else if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', inicializarPainel);
+} else {
+  inicializarPainel();
 }

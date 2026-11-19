@@ -15,40 +15,52 @@
     return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || !!target.isContentEditable;
   }
 
-  // 1. Escuta silenciosa para abrir o jogo (só roda fora de inputs / áreas editáveis)
-  window.addEventListener('keydown', e => {
-    if (estaEditandoTexto(e.target)) return;
+  let gatilhosSnakeRegistrados = false;
+  function registrarGatilhosSnake() {
+    if (gatilhosSnakeRegistrados) return;
+    gatilhosSnakeRegistrados = true;
 
-    if (e.key === 'Escape' && document.getElementById('modalSnake')) {
-      fecharSnake();
-      return;
-    }
+    // 1. Escuta silenciosa para abrir o jogo (só roda fora de inputs / áreas editáveis)
+    window.addEventListener('keydown', e => {
+      if (estaEditandoTexto(e.target)) return;
 
-    if (e.key && e.key.length === 1) {
-      bufferTeclas += e.key.toLowerCase();
-      if (bufferTeclas.length > 10) bufferTeclas = bufferTeclas.slice(-10);
+      if (e.key === 'Escape' && document.getElementById('modalSnake')) {
+        fecharSnake();
+        return;
+      }
 
-      if (bufferTeclas.endsWith('snake')) {
-        bufferTeclas = '';
+      if (e.key && e.key.length === 1) {
+        bufferTeclas += e.key.toLowerCase();
+        if (bufferTeclas.length > 10) bufferTeclas = bufferTeclas.slice(-10);
+
+        if (bufferTeclas.endsWith('snake')) {
+          bufferTeclas = '';
+          abrirSnake();
+        }
+      }
+    });
+
+    // 2. Escuta de 5 cliques rápidos no título
+    document.addEventListener('click', e => {
+      const el = e.target.closest('h1, .top h1, [data-brand]');
+      if (!el) return;
+
+      easterEggClicks++;
+      clearTimeout(easterEggTimer);
+      easterEggTimer = setTimeout(() => { easterEggClicks = 0; }, 1200);
+
+      if (easterEggClicks >= 5) {
+        easterEggClicks = 0;
         abrirSnake();
       }
-    }
-  });
+    });
+  }
 
-  // 2. Escuta de 5 cliques rápidos no título
-  document.addEventListener('click', e => {
-    const el = e.target.closest('h1, .top h1, [data-brand]');
-    if (!el) return;
-
-    easterEggClicks++;
-    clearTimeout(easterEggTimer);
-    easterEggTimer = setTimeout(() => { easterEggClicks = 0; }, 1200);
-
-    if (easterEggClicks >= 5) {
-      easterEggClicks = 0;
-      abrirSnake();
-    }
-  });
+  if (typeof PriusBus !== 'undefined') {
+    PriusBus.register('snake', ['core'], registrarGatilhosSnake, { dom: true });
+  } else {
+    registrarGatilhosSnake();
+  }
 
   const SLOT_CORES = {
     1: { head: '#f59e0b', body: '#d97706', tag: 'J1', nome: 'Jogador 1' },

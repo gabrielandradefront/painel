@@ -32,7 +32,7 @@ const nHora = (a, am, b, bm) => hh(a, am) + '-' + hh(b, bm);
 const turmaDoNome = f => f.replace(/\.pdf$/i, '').replace(/^\d{1,2}-\d{1,2}-\d{4}_/, '').replace(/(cronograma|docx|oficial|alunos|prius|20\d\d)/gi, ' ').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || f;
 
 async function pdfItems(buf) {
-  const pdf = await pdfjsLib.getDocument({ data: buf }).promise, P = [];
+  const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise, P = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const tc = await (await pdf.getPage(p)).getTextContent();
     P.push(tc.items.filter(i => i.str.trim()).map(i => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width })));
@@ -582,4 +582,8 @@ function viewAulas() {
   return subNav + 
          card('Nova aula avulsa', `<form data-form="aula"><input name="prof" placeholder="Professor" required><input name="turma" placeholder="Turma" required><input name="dia" type="date" value="${amanha}" required><input name="hora" type="time" required><input name="desc" placeholder="Descrição"><button class="b p">Adicionar</button></form>`) + 
          card('Quadro Geral de Aulas', searchHtml);
+}
+
+if (typeof PriusBus !== 'undefined') {
+  PriusBus.register('aulas', ['core']);
 }

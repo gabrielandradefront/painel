@@ -11,7 +11,8 @@ function viewHoje() {
   });
   aulasConf.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
   const confPendentes = aulasConf.filter(a => !a.confirmada);
-  const G = groups(mon(0), addD(mon(0), 6)), pendDocs = G.filter(g => !docDone(g));
+  const G = groups(mon(0), addD(mon(0), 6));
+  const pendDocs = typeof docDone === 'function' ? G.filter(g => !docDone(g)) : [];
   const repPend = S.reparos.filter(r => r.status !== 'Concluído');
   const orcAguardando = (S.orc.itens || []).filter(i => i.status === 'Aguardando aprovação');
   const orcProblema = (S.orc.itens || []).filter(i => i.status === 'Com problema');
@@ -112,7 +113,7 @@ function viewHoje() {
         <span class="mu">orçamentos aguardando &rarr;</span>
       </div>
       <div class="stat" data-act="goto_tab" data-tab="semana" data-sub="docs" style="cursor: pointer;" title="Ir para Recibos Docentes">
-        <b>${docPend(G)}</b>
+        <b>${typeof docPend === 'function' ? docPend(G) : 0}</b>
         <span class="mu">recibos pendentes &rarr;</span>
       </div>
     </div>
@@ -192,4 +193,8 @@ function viewHoje() {
       </div>
     </div>
   `;
+}
+
+if (typeof PriusBus !== 'undefined') {
+  PriusBus.register('hoje', ['core', 'operacional']);
 }

@@ -1102,3 +1102,7 @@ function viewOperacional() {
          card('', wkHtml) + 
          card('Recibos Docentes (1 por professor/dia)', body || '<div class="empty">Sem aulas agendadas para esta semana.</div>', G.filter(g => !docDone(g)).length);
 }
+
+if (typeof PriusBus !== 'undefined') {
+  PriusBus.register('operacional', ['core', 'orcamento']);
+}

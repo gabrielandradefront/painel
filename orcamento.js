@@ -878,3 +878,7 @@ function viewOrc() {
     </div>
   `;
 }
+
+if (typeof PriusBus !== 'undefined') {
+  PriusBus.register('orcamento', ['core']);
+}

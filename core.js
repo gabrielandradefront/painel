@@ -13,13 +13,199 @@ const SUPABASE_URL = 'https://umkbdxwbagwnkgvsqcrb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Dw2ug9P1PiLWUo0xvMjY1w_iiQ1Z7Uu';
 const SUPABASE_ROW_ID = 'prius-principal';
 
+// ========================================================
+// EVENT BUS CENTRAL E REGISTRO DE DEPENDÊNCIAS (PRIUS BUS)
+// ========================================================
+const PriusBus = (() => {
+  const listeners = new Map();
+  const registered = new Map();
+  const waiters = [];
+  const CORE_TREE = ['core', 'orcamento', 'operacional', 'aulas', 'hoje', 'app'];
+
+  let domReady = typeof document === 'undefined' || document.readyState !== 'loading';
+  let appReadyEmitted = false;
+
+  if (!domReady && typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+      domReady = true;
+      emit('dom:ready');
+      resolveAll();
+    }, { once: true });
+  }
+
+  function on(event, fn) {
+    if (typeof fn !== 'function') return () => {};
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(fn);
+    return () => off(event, fn);
+  }
+
+  function off(event, fn) {
+    const set = listeners.get(event);
+    if (set) set.delete(fn);
+  }
+
+  function once(event, fn) {
+    if (typeof fn !== 'function') return () => {};
+    const wrapper = payload => {
+      off(event, wrapper);
+      fn(payload);
+    };
+    return on(event, wrapper);
+  }
+
+  function emit(event, payload) {
+    const set = listeners.get(event);
+    if (!set) return;
+    [...set].forEach(fn => {
+      try {
+        fn(payload);
+      } catch (err) {
+        console.error(`[PriusBus] Erro no listener "${event}":`, err);
+      }
+    });
+  }
+
+  function depsSatisfied(deps, requireDom = false) {
+    if (requireDom && !domReady) return false;
+    return (deps || []).every(d => {
+      const mod = registered.get(d);
+      return !!mod && mod.initialized;
+    });
+  }
+
+  function resolveAll() {
+    let progressed = true;
+    while (progressed) {
+      progressed = false;
+
+      registered.forEach((mod, name) => {
+        if (mod.initialized) return;
+        if (!depsSatisfied(mod.deps, mod.requireDom)) return;
+
+        mod.initialized = true;
+        progressed = true;
+
+        if (typeof mod.onReady === 'function') {
+          try {
+            mod.onReady({ bus: api, name });
+          } catch (err) {
+            console.error(`[PriusBus] Erro ao inicializar módulo "${name}":`, err);
+          }
+        }
+        emit(`module:ready:${name}`, { name, deps: mod.deps });
+        emit('module:ready', { name, deps: mod.deps });
+      });
+
+      waiters.forEach(w => {
+        if (w.fired) return;
+        if (!depsSatisfied(w.deps, w.dom)) return;
+        w.fired = true;
+        progressed = true;
+        try {
+          w.fn({ bus: api, modules: getRegisteredModules() });
+        } catch (err) {
+          console.error('[PriusBus] Erro em callback whenReady:', err);
+        }
+      });
+    }
+
+    if (!appReadyEmitted && depsSatisfied(CORE_TREE, true)) {
+      appReadyEmitted = true;
+      emit('app:ready', { modules: getRegisteredModules() });
+    }
+  }
+
+  function register(name, deps = [], onReady = null, options = {}) {
+    if (!name || typeof name !== 'string') return api;
+    const cleanDeps = Array.isArray(deps) ? deps.filter(Boolean) : [];
+    const existing = registered.get(name);
+    if (existing && existing.initialized) return api;
+
+    registered.set(name, {
+      deps: cleanDeps,
+      onReady: typeof onReady === 'function' ? onReady : null,
+      requireDom: !!options.dom,
+      initialized: false
+    });
+
+    emit('module:registered', { name, deps: cleanDeps });
+    resolveAll();
+    return api;
+  }
+
+  function whenReady(deps, fn, options = {}) {
+    if (typeof fn !== 'function') return api;
+    const depList = Array.isArray(deps) ? deps.filter(Boolean) : (deps ? [deps] : []);
+    const requireDom = !!options.dom;
+    if (depsSatisfied(depList, requireDom)) {
+      try {
+        fn({ bus: api, modules: getRegisteredModules() });
+      } catch (err) {
+        console.error('[PriusBus] Erro em callback whenReady:', err);
+      }
+      return api;
+    }
+    waiters.push({ deps: depList, dom: requireDom, fn, fired: false });
+    return api;
+  }
+
+  function isReady(nameOrDeps, options = {}) {
+    if (!nameOrDeps) return appReadyEmitted || depsSatisfied(CORE_TREE, true);
+    const list = Array.isArray(nameOrDeps) ? nameOrDeps : [nameOrDeps];
+    return depsSatisfied(list, !!options.dom);
+  }
+
+  function getRegisteredModules() {
+    const out = [];
+    registered.forEach((mod, name) => {
+      if (mod.initialized) out.push(name);
+    });
+    return out;
+  }
+
+  function getPendingModules() {
+    const out = [];
+    registered.forEach((mod, name) => {
+      if (!mod.initialized) {
+        const missing = mod.deps.filter(d => !isReady(d));
+        out.push({ name, missing, waitingDom: mod.requireDom && !domReady });
+      }
+    });
+    return out;
+  }
+
+  const api = {
+    on,
+    off,
+    once,
+    emit,
+    register,
+    whenReady,
+    isReady,
+    getRegisteredModules,
+    getPendingModules,
+    CORE_TREE
+  };
+
+  return api;
+})();
+
+if (typeof window !== 'undefined') {
+  window.PriusBus = PriusBus;
+}
+
 // Controle de Tema (Claro / Escuro)
 function aplicarTema(t) {
-  const tema = t || localStorage.getItem(KEY + '-tema') || 'dark';
-  if (tema === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-  } else {
-    document.documentElement.removeAttribute('data-theme');
+  let salvo = null;
+  try { salvo = localStorage.getItem(KEY + '-tema'); } catch (e) {}
+  const tema = t || salvo || 'dark';
+  if (typeof document !== 'undefined' && document.documentElement) {
+    if (tema === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
   }
   try { localStorage.setItem(KEY + '-tema', tema); } catch (e) {}
   return tema;
@@ -94,14 +280,13 @@ function normalizarEstado(raw) {
   obj.docs = obj.docs || {};
   obj.cat = obj.cat || {};
   obj.meta = obj.meta || {};
-  obj.orc = obj.orc || { inst: 'Prius', titulo: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
+  obj.orc = (obj.orc && typeof obj.orc === 'object') ? obj.orc : { inst: 'Prius', titulo: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
+  if (!Array.isArray(obj.orc.itens)) obj.orc.itens = [];
 
-  if (Array.isArray(obj.orc.itens)) {
-    obj.orc.itens.forEach(i => {
-      if (!i.status) i.status = 'Aguardando aprovação';
-      if (i.status === 'Pedido') i.status = 'Pedido feito';
-    });
-  }
+  obj.orc.itens.forEach(i => {
+    if (!i.status) i.status = 'Aguardando aprovação';
+    if (i.status === 'Pedido') i.status = 'Pedido feito';
+  });
 
   obj.reparos.forEach(r => {
     if (!r.status) r.status = r.feito ? 'Concluído' : 'Pendente';
@@ -132,6 +317,28 @@ try {
   S = normalizarEstado({});
 }
 
+// Variáveis globais de controle de navegação, filtros e notificações
+// Declaradas antes do motor de sincronização para evitar erros de TDZ durante a inicialização
+let tab = 'hoje';
+let subTabAulas = 'quadro';
+let subTabSemana = 'docs';
+let orcSlideAtivo = 0; // 0 = Slide 1 (Dados e Tabela), 1 = Slide 2 (Gráficos)
+let prodFiltroHist = '';
+
+let modoEntradaCronograma = 'pdf'; // 'pdf', 'texto', 'novo'
+let novaTurmaManualNome = '';
+let drawerAberto = false;
+let apelidosAberto = false;
+let resumoTextoCustomizado = null;
+let resumoTipoAtual = 'dia';
+
+let prev = null, pend = null, wk = 0, turmaPad = '', msg = '';
+let repFiltro = 'abertos', buscaAulas = '', showPast = false, buscaGlobalTermo = '', buscaGlobalTipo = 'todos';
+let dest = 'novo', nomeNovo = '', destPre = '', orcAsk = false;
+
+let toastTimer = null;
+let delTarget = null, delTimer = null;
+
 // ========================================================
 // MOTOR DE SINCRONIZAÇÃO COM SUPABASE (NUVEM + REALTIME)
 // ========================================================
@@ -145,10 +352,21 @@ let sbPendenciasLocais = false;
 const supabaseConfigurado = () =>
   typeof window !== 'undefined' &&
   window.supabase &&
+  typeof window.supabase.createClient === 'function' &&
   SUPABASE_URL &&
   SUPABASE_URL.startsWith('http') &&
   SUPABASE_ANON_KEY &&
   !SUPABASE_ANON_KEY.includes('COLE_SUA');
+
+// Inicializa o cliente Supabase imediatamente se o SDK CDN estiver disponível
+if (supabaseConfigurado()) {
+  try {
+    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (e) {
+    console.error('Erro ao inicializar cliente Supabase:', e);
+    sbClient = null;
+  }
+}
 
 async function enviarEstadoParaNuvem() {
   if (!supabaseConfigurado()) return false;
@@ -238,7 +456,7 @@ async function iniciarSupabase() {
       S.meta = S.meta || {};
       S.meta.ultimoSyncNuvem = S.meta.ultimoSyncNuvem || data.atualizado_em || new Date().toISOString();
       sbPendenciasLocais = false;
-      localStorage.setItem(KEY, JSON.stringify(S));
+      try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
       if (typeof render === 'function') render();
       toast('☁️ Painel sincronizado com a nuvem!');
     } else if (localTemDados) {
@@ -269,6 +487,7 @@ async function iniciarSupabase() {
               S.meta.ultimoSyncNuvem = S.meta.ultimoSyncNuvem || payload.new.atualizado_em || new Date().toISOString();
               sbPendenciasLocais = false;
               try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+              PriusBus.emit('sync:updated', { state: S, origem: 'realtime' });
               if (typeof render === 'function') render();
               toast('🔄 Atualizado por outro operador!');
             }
@@ -277,10 +496,12 @@ async function iniciarSupabase() {
         .subscribe();
     }
 
+    PriusBus.emit('sync:ready', { conectado: sbConectado });
     return true;
   } catch (e) {
     sbConectado = false;
     console.error('Falha na inicialização do Supabase:', e);
+    PriusBus.emit('sync:ready', { conectado: false, erro: e });
     return false;
   }
 }
@@ -293,11 +514,11 @@ const save = () => {
     console.error('Falha ao salvar:', e);
     toast('⚠️ Falha ao salvar no navegador! Armazenamento indisponível.');
   }
+  PriusBus.emit('state:saved', { state: S });
   agendarSyncNuvem();
 };
 
-// Inicia a conexão com a nuvem em segundo plano
-iniciarSupabase();
+// A sincronização inicial com a nuvem é disparada após o carregamento completo dos módulos em app.js
 
 // Funções utilitárias
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -328,11 +549,13 @@ function icoSeta(tipo, size = 15) {
 // Cálculo do consumo do localStorage
 function getStorageUsage() {
   let bytes = 0;
-  for (let k in localStorage) {
-    if (Object.prototype.hasOwnProperty.call(localStorage, k)) {
-      bytes += ((localStorage[k] || '').length + k.length) * 2;
+  try {
+    for (let k in localStorage) {
+      if (Object.prototype.hasOwnProperty.call(localStorage, k)) {
+        bytes += ((localStorage[k] || '').length + k.length) * 2;
+      }
     }
-  }
+  } catch (e) {}
   const kb = (bytes / 1024).toFixed(1);
   const maxKb = 5120;
   const pct = Math.min(100, (bytes / (5 * 1024 * 1024)) * 100).toFixed(1);
@@ -352,26 +575,7 @@ const itemPrecoSemFrete = i => (i.precoSemFrete !== undefined && i.precoSemFrete
 const itemFrete = i => (i.frete !== undefined && i.frete !== '') ? num(i.frete) : 0;
 const itemTotal = i => itemPrecoSemFrete(i) + itemFrete(i);
 
-// Variáveis de controle de navegação e filtros
-let tab = 'hoje';
-let subTabAulas = 'quadro';
-let subTabSemana = 'docs';
-let orcSlideAtivo = 0; // 0 = Slide 1 (Dados e Tabela), 1 = Slide 2 (Gráficos)
-let prodFiltroHist = '';
-
-let modoEntradaCronograma = 'pdf'; // 'pdf', 'texto', 'novo'
-let novaTurmaManualNome = '';
-let drawerAberto = false;
-let apelidosAberto = false;
-let resumoTextoCustomizado = null;
-let resumoTipoAtual = 'dia';
-
-let prev = null, pend = null, wk = 0, turmaPad = '', msg = '';
-let repFiltro = 'abertos', buscaAulas = '', showPast = false, buscaGlobalTermo = '', buscaGlobalTipo = 'todos';
-let dest = 'novo', nomeNovo = '', destPre = '', orcAsk = false;
-
 // Notificações e utilitários de interface
-let toastTimer = null;
 function toast(m) {
   clearTimeout(toastTimer);
   const t = document.getElementById('toast');
@@ -395,7 +599,6 @@ function copy(txt) {
   try { navigator.clipboard.writeText(txt).then(ok, fb); } catch (e) { fb(); }
 }
 
-let delTarget = null, delTimer = null;
 function confirmarExclusao(el, acao) {
   if (delTarget === el) {
     clearTimeout(delTimer);
@@ -446,3 +649,6 @@ function groups(a, b) {
   });
   return Object.values(m).sort((p, q) => (p.dia + norm(p.prof)).localeCompare(q.dia + norm(q.prof)));
 }
+
+// Registra o núcleo global como pronto após toda a inicialização de estado, banco e utilitários
+PriusBus.register('core', []);
