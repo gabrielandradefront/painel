@@ -139,55 +139,62 @@ h3 {
 }
 
 /* ========================================================
-   IDENTIDADE VISUAL: LOGO BADGE TECH (PAINEL PRIUS LIVE)
+   IDENTIDADE VISUAL: LOGO BADGE TECH (ARGOS OPS LIVE)
 ======================================================== */
 .brand-badge-tech {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-family: 'Space Grotesk', 'Outfit', sans-serif;
+  gap: 10px;
   cursor: pointer;
   user-select: none;
-  padding: 4px 8px;
-  margin-left: -8px;
+  padding: 4px 6px;
+  margin-left: -6px;
   border-radius: 8px;
-  transition: transform 0.15s ease;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.brand-badge-tech:hover {
+  transform: scale(1.02);
 }
 
 .brand-badge-tech:active {
   transform: scale(0.985);
 }
 
-.brand-painel {
-  font-weight: 700;
-  font-size: 1.4rem;
-  letter-spacing: 1px;
+.brand-argos {
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  font-size: 1.45rem;
+  letter-spacing: 2px;
   color: var(--tx);
   line-height: 1;
 }
 
-.brand-prius-badge {
+.brand-ops-badge {
+  font-family: 'Cinzel', serif;
   font-weight: 800;
-  font-size: 1.4rem;
-  letter-spacing: 1px;
+  font-size: 1.35rem;
+  letter-spacing: 1.5px;
   color: #fbbf24;
-  background: rgba(217, 119, 6, 0.1);
+  background: rgba(217, 119, 6, 0.12);
   border: 1.5px solid #d97706;
   border-radius: 6px;
   padding: 3px 12px;
   position: relative;
   display: inline-flex;
   align-items: center;
-  line-height: 1.05;
+  line-height: 1;
   transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.brand-badge-tech:hover .brand-prius-badge {
-  background: rgba(217, 119, 6, 0.16);
-  box-shadow: 0 0 12px rgba(217, 119, 6, 0.22);
+.brand-badge-tech:hover .brand-ops-badge {
+  background: rgba(217, 119, 6, 0.18);
+  box-shadow: 0 0 12px rgba(217, 119, 6, 0.24);
 }
 
 .brand-live-indicator {
+  font-family: 'Space Grotesk', sans-serif;
   position: absolute;
   top: -7px;
   right: -5px;
@@ -201,15 +208,15 @@ h3 {
   line-height: 1;
 }
 
-:root[data-theme="light"] .brand-prius-badge,
-body.light .brand-prius-badge {
+:root[data-theme="light"] .brand-ops-badge,
+body.light .brand-ops-badge {
+  color: #b45309;
   background: rgba(217, 119, 6, 0.15);
   border-color: #b45309;
-  color: #b45309;
 }
 
-:root[data-theme="light"] .brand-badge-tech:hover .brand-prius-badge,
-body.light .brand-badge-tech:hover .brand-prius-badge {
+:root[data-theme="light"] .brand-badge-tech:hover .brand-ops-badge,
+body.light .brand-badge-tech:hover .brand-ops-badge {
   background: rgba(217, 119, 6, 0.22);
   box-shadow: 0 0 10px rgba(180, 83, 9, 0.18);
 }
@@ -1039,12 +1046,12 @@ b[id^="ot-"], .stat b, .drawer-item-text .time {
     font-size: 18px;
   }
 
-  .brand-painel,
-  .brand-prius-badge {
-    font-size: 1.15rem;
+  .brand-argos {
+    font-size: 1.2rem;
   }
 
-  .brand-prius-badge {
+  .brand-ops-badge {
+    font-size: 1.12rem;
     padding: 3px 10px;
   }
 
@@ -2128,6 +2135,33 @@ button.b.nav-arrow-btn {
   border-radius: 10px;
   padding: 10px 12px;
   margin-bottom: 10px;
+  transition: border-color 0.16s ease, opacity 0.16s ease;
+}
+
+.orc-hist-card.modo-ativo {
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: inset 3px 0 0 var(--ac);
+}
+
+.orc-hist-card.modo-outro {
+  opacity: 0.82;
+}
+
+.orc-hist-card.modo-outro:hover {
+  opacity: 1;
+}
+
+.orc-hist-match-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ac);
+  background: var(--ac-light);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 999px;
+  padding: 1px 7px;
+  line-height: 1.4;
 }
 
 .orc-hist-head {

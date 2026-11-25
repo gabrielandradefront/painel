@@ -521,7 +521,7 @@ async function orcXlsx() {
     try {
       toast('Gerando planilha do pedido...');
       const wb = new window.ExcelJS.Workbook();
-      wb.creator = 'Painel Operacional Prius';
+      wb.creator = 'ARGOS OPS';
       wb.created = agora;
       wb.modified = agora;
       const ws = wb.addWorksheet('Pedido Único', {
@@ -529,7 +529,7 @@ async function orcXlsx() {
       });
 
       ws.mergeCells('A1:D1');
-      ws.getCell('A1').value = 'PAINEL OPERACIONAL PRIUS  •  PEDIDO DE COMPRA (FORNECEDOR ÚNICO)';
+      ws.getCell('A1').value = 'ARGOS OPS  •  PEDIDO DE COMPRA (FORNECEDOR ÚNICO)';
       ws.getCell('A1').font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
       ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF121316' } };
       ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
@@ -616,7 +616,7 @@ async function orcXlsx() {
   try {
     toast('Gerando planilha formatada...');
     const wb = new window.ExcelJS.Workbook();
-    wb.creator = 'Painel Operacional Prius';
+    wb.creator = 'ARGOS OPS';
     wb.created = agora;
     wb.modified = agora;
 
@@ -679,7 +679,7 @@ async function orcXlsx() {
     // --- LINHA 1: BANNER PRINCIPAL ---
     ws.mergeCells('A1:I1');
     const cBanner = ws.getCell('A1');
-    cBanner.value = 'PAINEL OPERACIONAL PRIUS  •  MAPA COMPARATIVO DE COTAÇÃO';
+    cBanner.value = 'ARGOS OPS  •  MAPA COMPARATIVO DE COTAÇÃO';
     cBanner.font = { name: FONT_NAME, size: 14, bold: true, color: { argb: C_WHITE } };
     cBanner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_MIDNIGHT } };
     cBanner.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
@@ -1028,7 +1028,7 @@ async function orcXlsx() {
 
       wsHist.mergeCells('A1:E1');
       const hTitle = wsHist.getCell('A1');
-      hTitle.value = 'PAINEL PRIUS  •  HISTÓRICO DE COTAÇÕES ARQUIVADAS';
+      hTitle.value = 'ARGOS OPS  •  HISTÓRICO DE COTAÇÕES ARQUIVADAS';
       hTitle.font = { name: FONT_NAME, size: 13, bold: true, color: { argb: C_WHITE } };
       hTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_MIDNIGHT } };
       hTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
@@ -1119,7 +1119,7 @@ function orcCopy() {
     return;
   }
 
-  let txt = `*COTAÇÃO - ${S.orc.titulo || 'Prius'} (${br(S.orc.data || hoje)})*\n\n`;
+  let txt = `*COTAÇÃO - ${S.orc.titulo || 'ARGOS OPS'} (${br(S.orc.data || hoje)})*\n\n`;
   itens.forEach((i, idx) => {
     txt += `${idx + 1}. *${i.forn || 'Fornecedor'}*\n`;
     txt += `   • Sem frete: ${brl(itemPrecoSemFrete(i))} | Frete: ${brl(itemFrete(i))}\n`;
@@ -1130,8 +1130,25 @@ function orcCopy() {
   copy(txt);
 }
 
+function renderSwitchModoOrcamento(modo = orcModo()) {
+  const ehPedido = modo === 'pedido_fornecedor';
+  return `
+    <div class="orc-mode-switcher" role="tablist" aria-label="Tipo de cotação">
+      <button type="button" class="orc-mode-btn ${!ehPedido ? 'active' : ''}" data-act="orc_set_modo" data-modo="comparativo_fornecedores" role="tab" aria-selected="${!ehPedido}">
+        <span class="orc-mode-title">🏢 1 Item • Vários Fornecedores</span>
+        <span class="orc-mode-sub">Comparar o mesmo item entre fornecedores e destacar o menor preço</span>
+      </button>
+      <button type="button" class="orc-mode-btn ${ehPedido ? 'active' : ''}" data-act="orc_set_modo" data-modo="pedido_fornecedor" role="tab" aria-selected="${ehPedido}">
+        <span class="orc-mode-title">📦 Vários Itens • 1 Fornecedor</span>
+        <span class="orc-mode-sub">Montar lista de compras com vários itens, quantidades e soma do pedido</span>
+      </button>
+    </div>
+  `;
+}
+
 function viewOrc() {
   const modo = orcModo();
+  modoOrcamentoAtual = modo;
   const ehPedido = modo === 'pedido_fornecedor';
   const itens = S.orc.itens || [];
   const menorValor = !ehPedido && itens.length ? Math.min(...itens.map(itemTotal)) : 0;
@@ -1158,19 +1175,8 @@ function viewOrc() {
     </div>
   `;
 
-  // Seletor de Modo de Cotação (Topo do Formulário)
-  const seletorModoHtml = `
-    <div class="orc-mode-switcher" role="tablist" aria-label="Tipo de cotação">
-      <button type="button" class="orc-mode-btn ${!ehPedido ? 'active' : ''}" data-act="orc_set_modo" data-modo="comparativo_fornecedores" role="tab" aria-selected="${!ehPedido}">
-        <span class="orc-mode-title">🏢 1 Item • Vários Fornecedores</span>
-        <span class="orc-mode-sub">Comparar o mesmo item entre fornecedores e destacar o menor preço</span>
-      </button>
-      <button type="button" class="orc-mode-btn ${ehPedido ? 'active' : ''}" data-act="orc_set_modo" data-modo="pedido_fornecedor" role="tab" aria-selected="${ehPedido}">
-        <span class="orc-mode-title">📦 Vários Itens • 1 Fornecedor</span>
-        <span class="orc-mode-sub">Montar lista de compras com vários itens, quantidades e soma do pedido</span>
-      </button>
-    </div>
-  `;
+  // Seletor reutilizável de Modo de Cotação (exibido em ambas as sub-abas)
+  const seletorModoHtml = renderSwitchModoOrcamento(modo);
 
   const resumoComparacaoHtml = `
     <div id="orcComparacaoResumo" class="orc-cmp-summary" style="display:${comparacaoAtiva ? 'flex' : 'none'};">
@@ -1512,15 +1518,26 @@ function viewOrc() {
     linhaDoTempoHtml = '<div class="empty">Nenhuma cotação arquivada para comparar variações históricas.</div>';
   }
 
-  // 3. Lista Completa de Arquivos (com tag de modo e itens organizados)
-  const historicoListaCards = (S.orcHist || []).map(h => {
+  // 3. Lista Completa de Arquivos (com destaque e filtro opcional pelo modo ativo, preservando registros antigos)
+  const todoHist = S.orcHist || [];
+  const qtdNoModoAtivo = todoHist.filter(h => orcModo(h) === modo).length;
+  const histExibidos = orcHistFiltrarModo
+    ? todoHist.filter(h => orcModo(h) === modo)
+    : todoHist;
+  const rotuloModoAtivo = ehPedido ? '📦 Vários Itens • 1 Fornecedor' : '🏢 1 Item • Vários Fornecedores';
+
+  const historicoListaCards = histExibidos.map(h => {
     const mHist = orcModo(h);
     const ehPedHist = mHist === 'pedido_fornecedor';
+    const combinaModoAtivo = mHist === modo;
     const hItens = h.itens || [];
     const totalRef = orcTotalReferencia(h);
     const tagModo = ehPedHist
       ? `<span class="orc-hist-tag pedido">📦 Pedido único${h.fornecedor ? ' (' + esc(h.fornecedor) + ')' : ''}</span>`
       : `<span class="orc-hist-tag multi">🏢 Multi-fornecedor</span>`;
+    const badgeModoAtivo = (!orcHistFiltrarModo && combinaModoAtivo)
+      ? `<span class="orc-hist-match-pill" title="Corresponde ao modo selecionado acima">● Modo ativo</span>`
+      : '';
 
     const itensListaHtml = hItens.length
       ? `<ul class="orc-hist-itens">
@@ -1538,12 +1555,13 @@ function viewOrc() {
       : '';
 
     return `
-      <div class="orc-hist-card">
+      <div class="orc-hist-card ${combinaModoAtivo ? 'modo-ativo' : 'modo-outro'}">
         <div class="orc-hist-head">
           <div class="orc-hist-meta">
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <b>${esc(h.titulo || (ehPedHist ? (h.fornecedor || 'Pedido Único') : 'Cotação'))} — ${br(h.data)}</b>
               ${tagModo}
+              ${badgeModoAtivo}
             </div>
             <span class="mu" style="font-size:12px;">
               ${ehPedHist ? `${hItens.length} item(ns) • Total: ${brl(totalRef)}` : `${hItens.length} fornecedor(es) • Melhor oferta: ${brl(totalRef)}`}
@@ -1558,10 +1576,22 @@ function viewOrc() {
         ${itensListaHtml}
       </div>
     `;
-  }).join('') || '<div class="empty">Nenhuma cotação arquivada no histórico.</div>';
+  }).join('') || (
+    orcHistFiltrarModo && todoHist.length
+      ? `<div class="empty">Nenhuma cotação arquivada no modo <b>${rotuloModoAtivo}</b>. <button class="b" data-act="orc_tog_filtro_hist_modo" style="margin-left:8px; font-size:11.5px; padding:3px 9px;">Mostrar todos (${todoHist.length})</button></div>`
+      : '<div class="empty">Nenhuma cotação arquivada no histórico.</div>'
+  );
 
   const slide2 = `
     <div style="flex: 0 0 100%; min-width: 100%;">
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0;">Tipo de Cotação</h2>
+          <button class="b" data-act="orc_ir_slide" data-s="0" style="font-size:12px; padding:5px 10px;" title="Abrir o formulário no modo selecionado">📋 Abrir formulário neste modo</button>
+        </div>
+        ${seletorModoHtml}
+      </div>
+
       <div class="card" style="margin-bottom:14px;">
         <h2>${ehPedido ? '📊 Distribuição de Custos do Pedido' : '📊 Comparativo de Preços dos Fornecedores'}</h2>
         <div class="mu" style="margin-bottom:12px;">${ehPedido ? `Composição do pedido ativo (${esc(S.orc.fornecedor || S.orc.titulo || 'Pedido atual')}):` : `Gráfico de barras da cotação ativa (${esc(S.orc.titulo || 'Item atual')}):`}</div>
@@ -1584,8 +1614,18 @@ function viewOrc() {
       </div>
 
       <div class="card">
-        <h2>💾 Cotações Arquivadas</h2>
-        <div class="mu" style="margin-bottom:10px;">Clique em "Carregar na Tela" para reabrir um pedido arquivado e ativar a comparação automática de reajustes:</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0;">💾 Cotações Arquivadas (${histExibidos.length}${orcHistFiltrarModo ? ` de ${todoHist.length}` : ''})</h2>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="b ${!orcHistFiltrarModo ? 'p' : ''}" data-act="orc_set_filtro_hist_modo" data-v="todos" style="font-size:11.5px; padding:4px 10px;">Todos (${todoHist.length})</button>
+            <button type="button" class="b ${orcHistFiltrarModo ? 'p' : ''}" data-act="orc_set_filtro_hist_modo" data-v="modo" style="font-size:11.5px; padding:4px 10px;">Somente modo ativo (${qtdNoModoAtivo})</button>
+          </div>
+        </div>
+        <div class="mu" style="margin-bottom:10px;">
+          ${orcHistFiltrarModo
+            ? `Filtrando arquivos do modo <b>${rotuloModoAtivo}</b>. Clique em "Carregar na Tela" para reabrir e comparar reajustes:`
+            : `Exibindo todos os arquivos (com destaque para <b>${rotuloModoAtivo}</b>). Clique em "Carregar na Tela" para reabrir e comparar reajustes:`}
+        </div>
         <div style="max-height:360px; overflow-y:auto;">
           ${historicoListaCards}
         </div>

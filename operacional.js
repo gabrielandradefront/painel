@@ -414,7 +414,7 @@ async function baixarPlanilhaResumo(tipo) {
   try {
     toast('Gerando planilha operacional...');
     const wb = new window.ExcelJS.Workbook();
-    wb.creator = 'Painel Operacional Prius';
+    wb.creator = 'ARGOS OPS';
     wb.created = agora;
     wb.modified = agora;
 
@@ -510,7 +510,7 @@ async function baixarPlanilhaResumo(tipo) {
     aplicarBanner(
       wsAulas,
       9,
-      `PAINEL OPERACIONAL PRIUS  •  PLANEJAMENTO DE AULAS (${rotuloPeriodo})`,
+      `ARGOS OPS  •  PLANEJAMENTO DE AULAS (${rotuloPeriodo})`,
       `Período: ${br(hoje)} a ${br(dataFim)} (${rotuloDias})   |   Manutenções Abertas: ${repPend.length}   |   Exportado em: ${geradoEm}`
     );
 
@@ -679,7 +679,7 @@ async function baixarPlanilhaResumo(tipo) {
       aplicarBanner(
         wsDocs,
         7,
-        'PAINEL OPERACIONAL PRIUS  •  CONTROLE DE RECIBOS E CONTRATOS',
+        'ARGOS OPS  •  CONTROLE DE RECIBOS E CONTRATOS',
         `Período: ${br(hoje)} a ${br(dataFim)}   |   Grupos Professor/Dia: ${G_periodo.length}   |   Pendentes: ${pendCount}`
       );
 
@@ -769,7 +769,7 @@ async function baixarPlanilhaResumo(tipo) {
       aplicarBanner(
         wsRep,
         5,
-        'PAINEL OPERACIONAL PRIUS  •  MANUTENÇÕES E REPAROS EM ABERTO',
+        'ARGOS OPS  •  MANUTENÇÕES E REPAROS EM ABERTO',
         `Chamados em aberto: ${repPend.length}   |   Exportado em: ${geradoEm}`
       );
 
@@ -838,7 +838,7 @@ async function baixarPlanilhaResumo(tipo) {
       aplicarBanner(
         wsOrc,
         7,
-        'PAINEL OPERACIONAL PRIUS  •  ORÇAMENTOS AGUARDANDO APROVAÇÃO',
+        'ARGOS OPS  •  ORÇAMENTOS AGUARDANDO APROVAÇÃO',
         `Cotação: ${S.orc.titulo || 'Cotação Atual'}   |   Fornecedores aguardando: ${orcAguardando.length}   |   Exportado em: ${geradoEm}`
       );
 

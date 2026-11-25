@@ -1253,7 +1253,8 @@ document.addEventListener('click', async e => {
 
   if (a === 'orc_set_modo') {
     const novoModo = t.dataset.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
-    if (S.orc.modo !== novoModo) {
+    if (S.orc.modo !== novoModo || modoOrcamentoAtual !== novoModo) {
+      modoOrcamentoAtual = novoModo;
       S.orc.modo = novoModo;
       if (cotacaoBaseComparacao && cotacaoBaseComparacao.modo !== novoModo) {
         cotacaoBaseComparacao = null;
@@ -1261,6 +1262,16 @@ document.addEventListener('click', async e => {
       save();
       render();
     }
+    return;
+  }
+  if (a === 'orc_set_filtro_hist_modo') {
+    orcHistFiltrarModo = t.dataset.v === 'modo';
+    render();
+    return;
+  }
+  if (a === 'orc_tog_filtro_hist_modo') {
+    orcHistFiltrarModo = !orcHistFiltrarModo;
+    render();
     return;
   }
   if (a === 'orc_limpar_comparacao') {
@@ -1316,6 +1327,7 @@ document.addEventListener('click', async e => {
     const h = (S.orcHist || []).find(x => x.id === id);
     if (h && confirm(`Carregar "${h.titulo || h.fornecedor || 'Cotação'}" na tela?\nOs dados atuais serão substituídos e a comparação de preços será ativada.`)) {
       const modoHist = h.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
+      modoOrcamentoAtual = modoHist;
       S.orc = { 
         inst: S.orc.inst || 'Prius',
         modo: modoHist,

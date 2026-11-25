@@ -104,7 +104,7 @@
       <div style="background: var(--card, #1c1d22); border: 1px solid var(--bd, #2d2f36); border-radius: 14px; padding: 16px 18px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.65); width: fit-content; max-width: 96vw; max-height: 96vh; display: flex; flex-direction: column; align-items: center; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 12px; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <b style="color: var(--ac, #f59e0b); font-size: 18px;">🐍 Snake Prius Arena</b>
+            <b style="color: var(--ac, #f59e0b); font-size: 18px;">🐍 Snake ARGOS OPS Arena</b>
             <span id="snakeModoBadge" class="pill" style="font-size: 11px; padding: 2px 9px;">⏳ Conectando...</span>
             <span id="snakeRoundStatus" style="font-size: 12px; color: var(--mu, #9ca3af); font-weight: 500;"></span>
           </div>
