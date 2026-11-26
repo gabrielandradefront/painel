@@ -37,12 +37,62 @@
           <input id="buscaGlobal" placeholder="Buscar no painel..." autocomplete="off">
           <button id="btnLimparBuscaTop" class="top-search-clear" title="Limpar busca" style="display:none;" data-act="limparBuscaGlobal">✕</button>
         </div>
+        <button id="btnOpenSettings" class="b top-settings-btn" data-act="abrir_config_modal" title="Configurações e Sistema" aria-label="Configurações e Sistema">⚙️</button>
       </div>
     </div>
     <nav id="nav"></nav>
     <div id="v"></div>
   </main>
   <div id="toast"></div>
+
+  <!-- Modal Unificado de Configurações e Sistema -->
+  <div id="modalSystemSettings" class="modal-presets-overlay modal-settings-overlay" style="display: none;">
+    <div class="modal-presets-card modal-settings-card" role="dialog" aria-modal="true" aria-labelledby="modalSettingsTitle">
+      <div class="modal-presets-header modal-settings-header">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-size:18px;">⚙️</span>
+          <b id="modalSettingsTitle" style="font-size:16px; color:var(--tx);">Configurações e Sistema</b>
+        </div>
+        <button class="x" data-act="fechar_config_modal" title="Fechar (Esc)" aria-label="Fechar configurações" style="font-size:18px;">✕</button>
+      </div>
+
+      <div class="modal-settings-tabs" role="tablist" aria-label="Abas de configurações">
+        <button type="button" class="modal-settings-tab active" data-act="settings_tab" data-tab="geral" role="tab" aria-selected="true">⚙️ Geral</button>
+        <button type="button" class="modal-settings-tab" data-act="settings_tab" data-tab="presets" role="tab" aria-selected="false">🧩 Predefinições</button>
+        <button type="button" class="modal-settings-tab" data-act="settings_tab" data-tab="professores" role="tab" aria-selected="false">👥 Gestão de Professores</button>
+      </div>
+
+      <div class="modal-settings-body">
+        <!-- Aba 1: Geral -->
+        <div id="settingsTabPanelGeral" class="modal-settings-panel active" data-settings-panel="geral"></div>
+
+        <!-- Aba 2: Predefinições -->
+        <div id="settingsTabPanelPresets" class="modal-settings-panel" data-settings-panel="presets" style="display:none;">
+          <div class="modal-presets-tabs modal-presets-subtabs" role="tablist" aria-label="Categorias de predefinições">
+            <button type="button" class="modal-presets-tab active" data-act="preset_tab" data-tab="reparos">Reparos</button>
+            <button type="button" class="modal-presets-tab" data-act="preset_tab" data-tab="professores">Professores / Controle</button>
+            <button type="button" class="modal-presets-tab" data-act="preset_tab" data-tab="orcamentos">Orçamentos</button>
+            <button type="button" class="modal-presets-tab" data-act="preset_tab" data-tab="notas">Notas</button>
+          </div>
+          <div class="modal-presets-body" style="padding: 16px 0 0;">
+            <div class="mu" style="margin-bottom:12px; font-size:12.5px;">Adicione ou remova opções padrão utilizadas em todo o sistema.</div>
+            <form id="formAddPreset" class="modal-presets-form">
+              <select id="presetSelectSub" aria-label="Subcategoria da predefinição" style="flex:1 1 170px;"></select>
+              <input id="presetInputNome" placeholder="Nome da nova opção..." required autocomplete="off" style="flex:2 1 180px;">
+              <input id="presetInputExtra" placeholder="URL ou link padrão opcional (fornecedores)" autocomplete="off" style="flex:2 1 180px; display:none;">
+              <button type="submit" class="b p" style="white-space:nowrap;">Adicionar</button>
+            </form>
+            <div class="modal-presets-chips-wrap" id="modalPresetsChipsContainer">
+              <!-- Chips gerados dinamicamente -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Aba 3: Gestão de Professores -->
+        <div id="settingsTabPanelProfessores" class="modal-settings-panel" data-settings-panel="professores" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Bibliotecas CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,6 +102,7 @@
 
   <!-- Scripts Modulares do Painel Prius -->
   <script src="core.js"></script>
+  <script src="presets.js"></script>
   <script src="orcamento.js"></script>
   <script src="operacional.js"></script>
   <script src="aulas.js"></script>

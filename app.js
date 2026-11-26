@@ -58,8 +58,10 @@ function reverterSnapshot() {
   } catch (e) { alert('Erro: ' + e.message); }
 }
 
-// --- ABA CONFIGURAÇÕES ---
-function viewConfig() {
+// --- MODAL UNIFICADO DE CONFIGURAÇÕES E SISTEMA ---
+let settingsTabAtual = 'geral';
+
+function renderSettingsGeralHtml() {
   const temaAtual = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
   const isLight = temaAtual === 'light';
 
@@ -193,8 +195,56 @@ function viewConfig() {
 
   return card('🎨 Aparência & Tema do Painel', temaHtml) +
          card('☁️ Status da Nuvem & Manutenção de Dados', nuvemHtml) + 
-         card('💾 Backup e Restauração de Dados', backupHtml) + 
-         (typeof cardApelidos === 'function' ? cardApelidos() : '');
+         card('💾 Backup e Restauração de Dados', backupHtml);
+}
+
+function viewConfig() {
+  return renderSettingsGeralHtml();
+}
+
+function renderModalSystemSettings() {
+  const modal = document.getElementById('modalSystemSettings');
+  if (!modal) return;
+
+  const validTabs = ['geral', 'presets', 'professores'];
+  if (!validTabs.includes(settingsTabAtual)) settingsTabAtual = 'geral';
+
+  modal.querySelectorAll('.modal-settings-tab').forEach(btn => {
+    const isAtiva = btn.dataset.tab === settingsTabAtual;
+    btn.classList.toggle('active', isAtiva);
+    btn.setAttribute('aria-selected', isAtiva ? 'true' : 'false');
+  });
+
+  modal.querySelectorAll('.modal-settings-panel').forEach(panel => {
+    const isAtivo = panel.dataset.settingsPanel === settingsTabAtual;
+    panel.classList.toggle('active', isAtivo);
+    panel.style.display = isAtivo ? 'block' : 'none';
+  });
+
+  const panelGeral = document.getElementById('settingsTabPanelGeral');
+  const panelProf = document.getElementById('settingsTabPanelProfessores');
+
+  if (settingsTabAtual === 'geral' && panelGeral) {
+    panelGeral.innerHTML = renderSettingsGeralHtml();
+  } else if (settingsTabAtual === 'presets') {
+    if (typeof renderModalPresets === 'function') renderModalPresets();
+  } else if (settingsTabAtual === 'professores' && panelProf) {
+    panelProf.innerHTML = typeof cardApelidos === 'function' ? cardApelidos() : '';
+  }
+}
+
+function abrirModalConfig(tabInicial = 'geral') {
+  const validTabs = ['geral', 'presets', 'professores'];
+  settingsTabAtual = validTabs.includes(tabInicial) ? tabInicial : 'geral';
+  const modal = document.getElementById('modalSystemSettings');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  renderModalSystemSettings();
+}
+
+function fecharModalConfig() {
+  const modal = document.getElementById('modalSystemSettings');
+  if (modal) modal.style.display = 'none';
 }
 
 // --- GAVETA LATERAL DE LEMBRETES (DRAWER) ---
@@ -263,7 +313,10 @@ function renderDrawer() {
           <span style="font-size:18px;">📝</span>
           <b style="font-size:15px; color:var(--ac);">Lembretes Rápidos</b>
         </div>
-        <button class="x" data-act="toggle_drawer" title="Fechar (Esc)" style="font-size:16px;">✕</button>
+        <div style="display:flex; align-items:center; gap:6px;">
+          ${typeof presetGearBtn === 'function' ? presetGearBtn('notas', 'etiquetas') : ''}
+          <button class="x" data-act="toggle_drawer" title="Fechar (Esc)" style="font-size:16px;">✕</button>
+        </div>
       </div>
 
       <form data-form="novo_lembrete" class="drawer-form">
@@ -550,7 +603,10 @@ function views() {
   if (tab === 'aulas') return typeof viewAulas === 'function' ? viewAulas() : '';
   if (tab === 'semana') return typeof viewOperacional === 'function' ? viewOperacional() : '';
   if (tab === 'orc') return typeof viewOrc === 'function' ? viewOrc() : '';
-  if (tab === 'config') return viewConfig();
+  if (tab === 'config') {
+    tab = 'hoje';
+    return typeof viewHoje === 'function' ? viewHoje() : '';
+  }
 
   return '';
 }
@@ -569,13 +625,7 @@ function render() {
     try { selStart = active.selectionStart; selEnd = active.selectionEnd; } catch (e) {} 
   }
   
-  navEl.innerHTML = 
-    TABS.map(([k, n]) => `<button class="${k === tab && !buscaGlobalTermo ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('') +
-    `<button class="nav-config-btn ${tab === 'config' && !buscaGlobalTermo ? 'on' : ''}" data-act="abrir_config" title="Configurações do Sistema">
-      <span style="font-size:13px; line-height:1;">⚙️</span>
-      <span class="nav-config-full">Configurações</span>
-      <span class="nav-config-short">Config</span>
-    </button>`;
+  navEl.innerHTML = TABS.map(([k, n]) => `<button class="${k === tab && !buscaGlobalTermo ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('');
   
   vEl.innerHTML = views();
 
@@ -613,6 +663,11 @@ function render() {
     btnLimpar.style.display = buscaGlobalTermo.trim() ? 'block' : 'none';
   }
   
+  const modalSettings = document.getElementById('modalSystemSettings');
+  if (modalSettings && modalSettings.style && modalSettings.style.display !== 'none') {
+    renderModalSystemSettings();
+  }
+
   if (activeId) {
     const el = document.getElementById(activeId);
     if (el) { 
@@ -791,9 +846,14 @@ document.addEventListener('keydown', e => {
         if (inp) inp.focus();
       }, 100);
     }
-  } else if (e.key === 'Escape' && drawerAberto) {
-    drawerAberto = false;
-    render();
+  } else if (e.key === 'Escape') {
+    const modalSettings = document.getElementById('modalSystemSettings');
+    if (modalSettings && modalSettings.style.display !== 'none') {
+      fecharModalConfig();
+    } else if (drawerAberto) {
+      drawerAberto = false;
+      render();
+    }
   } else if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-act="toggle_apelidos_box"]')) {
     e.preventDefault();
     apelidosAberto = !apelidosAberto;
@@ -811,10 +871,15 @@ document.addEventListener('wheel', e => {
 }, { passive: false });
 
 document.addEventListener('click', async e => {
+  const modalSettings = document.getElementById('modalSystemSettings');
+  if (modalSettings && e.target === modalSettings) {
+    fecharModalConfig();
+    return;
+  }
   const t = e.target.closest('[data-tab],[data-act]'); 
   if (!t) return; 
   
-  if (t.dataset.tab) { 
+  if (t.dataset.tab && !t.dataset.act) { 
     tab = t.dataset.tab; 
     buscaGlobalTermo = ''; 
     if (tab === 'aulas') buscaGlobalTipo = 'aulas';
@@ -906,10 +971,17 @@ document.addEventListener('click', async e => {
     return;
   }
 
-  if (a === 'abrir_config') {
-    tab = 'config';
-    buscaGlobalTermo = '';
-    render();
+  if (a === 'abrir_config' || a === 'abrir_config_modal') {
+    abrirModalConfig('geral');
+    return;
+  }
+  if (a === 'fechar_config_modal') {
+    fecharModalConfig();
+    return;
+  }
+  if (a === 'settings_tab') {
+    settingsTabAtual = t.dataset.tab || 'geral';
+    renderModalSystemSettings();
     return;
   }
 
@@ -1315,6 +1387,8 @@ document.addEventListener('click', async e => {
       titulo: (S.orc.titulo || '').trim() || tituloPadrao, 
       fornecedor: (S.orc.fornecedor || '').trim(),
       link: (S.orc.link || '').trim(),
+      categoria: (S.orc.categoria || '').trim(),
+      unidade: (S.orc.unidade || '').trim(),
       qtdTotal: S.orc.qtdTotal || '',
       qtdItens: S.orc.itens.length, 
       obs: S.orc.obs || '',
@@ -1334,6 +1408,8 @@ document.addEventListener('click', async e => {
         titulo: h.titulo || '', 
         fornecedor: h.fornecedor || '',
         link: h.link || '',
+        categoria: h.categoria || '',
+        unidade: h.unidade || '',
         solic: h.solic || '', 
         data: hoje, 
         obs: h.obs || '', 
@@ -1353,7 +1429,7 @@ document.addEventListener('click', async e => {
     if (!orcAsk) { orcAsk = true; t.textContent = 'Confirmar limpeza?'; setTimeout(() => { orcAsk = false; if (t.isConnected) t.textContent = '🧹 Limpar'; }, 3000); return; }
     orcAsk = false;
     const modoAtual = typeof orcModo === 'function' ? orcModo(S.orc) : 'comparativo_fornecedores';
-    S.orc = { inst: S.orc.inst, modo: modoAtual, titulo: '', fornecedor: '', link: '', solic: S.orc.solic, data: hoje, obs: '', qtdTotal: '', itens: [] }; 
+    S.orc = { inst: S.orc.inst, modo: modoAtual, titulo: '', fornecedor: '', link: '', categoria: '', unidade: '', solic: S.orc.solic, data: hoje, obs: '', qtdTotal: '', itens: [] }; 
     cotacaoBaseComparacao = null;
     orcFornHistorico = '';
     orcItemHistorico = '';
@@ -1406,11 +1482,140 @@ document.addEventListener('click', async e => {
     return;
   }
   if (a === 'del_apelido') confirmarExclusao(t, () => { S.apelidos = S.apelidos.filter(x => x.id !== t.dataset.id); save(); render(); toast('Desfeito'); });
+  if (a === 'del_prof_perfil') {
+    const key = t.dataset.key;
+    if (key && S.profPerfis && S.profPerfis[key]) {
+      confirmarExclusao(t, () => {
+        delete S.profPerfis[key];
+        save();
+        render();
+        toast('Ficha removida.');
+      });
+    }
+    return;
+  }
+
+  // Ações do Gerenciador de Predefinições (dentro do Modal Unificado)
+  if (a === 'abrir_presets') {
+    if (typeof abrirModalPresets === 'function') abrirModalPresets('reparos', 'locais');
+    return;
+  }
+  if (a === 'fechar_presets') {
+    fecharModalConfig();
+    return;
+  }
+  if (a === 'abrir_presets_sub') {
+    const cat = t.dataset.cat || 'reparos';
+    const sub = t.dataset.sub || '';
+    if (typeof abrirModalPresets === 'function') abrirModalPresets(cat, sub);
+    return;
+  }
+  if (a === 'preset_tab') {
+    const tabKey = t.dataset.tab || 'reparos';
+    presetTabAtual = tabKey;
+    presetSubAtual = '';
+    const modal = document.getElementById('modalSystemSettings');
+    if (modal) {
+      modal.querySelectorAll('.modal-presets-tab').forEach(b => b.classList.remove('active'));
+      t.classList.add('active');
+      if (typeof renderModalPresets === 'function') renderModalPresets();
+    }
+    return;
+  }
+  if (a === 'preset_select_sub') {
+    const subKey = t.dataset.sub || '';
+    if (subKey) {
+      presetSubAtual = subKey;
+      if (typeof renderModalPresets === 'function') renderModalPresets();
+    }
+    return;
+  }
+  if (a === 'preset_del') {
+    const cat = t.dataset.cat;
+    const sub = t.dataset.sub;
+    const val = t.dataset.val;
+    if (cat && sub && val) {
+      if (confirm(`Remover "${val}" das predefinições?`)) {
+        if (typeof removerPreset === 'function') removerPreset(cat, sub, val);
+      }
+    }
+    return;
+  }
+});
+
+// SUBMIT E FORMULÁRIO DO MODAL DE PREDEFINIÇÕES
+document.addEventListener('submit', e => {
+  if (e.target && e.target.id === 'formAddPreset') {
+    e.preventDefault();
+    const nomeInp = document.getElementById('presetInputNome');
+    const extraInp = document.getElementById('presetInputExtra');
+    const subSel = document.getElementById('presetSelectSub');
+    const val = nomeInp ? nomeInp.value.trim() : '';
+    const extra = extraInp ? extraInp.value.trim() : '';
+    if (!val) return;
+
+    const catKey = typeof presetTabAtual === 'string' ? presetTabAtual : 'reparos';
+    const subKey = (subSel && subSel.value) ? subSel.value : (typeof presetSubAtual === 'string' ? presetSubAtual : 'locais');
+
+    if (typeof adicionarPreset === 'function') {
+      const ok = adicionarPreset(catKey, subKey, val, extra);
+      if (ok) {
+        if (nomeInp) nomeInp.value = '';
+        if (extraInp) extraInp.value = '';
+      }
+    }
+    return;
+  }
 });
 
 document.addEventListener('change', async e => {
   const t = e.target, a = t.dataset.act;
 
+  if (t.id === 'presetSelectSub') {
+    presetSubAtual = t.value;
+    if (typeof renderModalPresets === 'function') renderModalPresets();
+    return;
+  }
+  if (t.id === 'selTurmaSalaPreset') {
+    if (t.value) {
+      novaTurmaManualNome = t.value;
+      render();
+    }
+    return;
+  }
+  if (t.id === 'orcFornecedorPresetSelect') {
+    const idx = t.value;
+    if (idx !== '') {
+      const lista = typeof getPresetList === 'function' ? getPresetList('orcamentos', 'fornecedores') : [];
+      const fav = lista[+idx];
+      if (fav) {
+        const nomeF = typeof fav === 'string' ? fav : (fav.nome || '');
+        const linkF = (fav && typeof fav === 'object' && fav.link) ? fav.link : '';
+        S.orc.fornecedor = nomeF;
+        S.orc.link = linkF;
+        save();
+        render();
+        toast(`Fornecedor "${nomeF}" preenchido!`);
+      }
+    }
+    return;
+  }
+  if (t.id === 'orcComparativoFavSelect') {
+    const idx = t.value;
+    if (idx !== '') {
+      const lista = typeof getPresetList === 'function' ? getPresetList('orcamentos', 'fornecedores') : [];
+      const fav = lista[+idx];
+      if (fav) {
+        const nomeF = typeof fav === 'string' ? fav : (fav.nome || '');
+        const linkF = (fav && typeof fav === 'object' && fav.link) ? fav.link : '';
+        const inpForn = document.getElementById('cad_fornNome');
+        const inpLink = document.getElementById('cad_linkCompra');
+        if (inpForn) inpForn.value = nomeF;
+        if (inpLink) inpLink.value = linkF;
+      }
+    }
+    return;
+  }
   if (t.id === 'filtroTipoGlobal') {
     buscaGlobalTipo = t.value;
     if (!buscaGlobalTermo.trim()) {
@@ -1441,7 +1646,35 @@ document.addEventListener('change', async e => {
   if (a === 'rep_st') { const r = find('reparos', t.dataset.id); if (r) { r.status = t.value; r.feito = (t.value === 'Concluído'); r.dataConc = r.feito ? hoje : ''; save(); render(); } }
   if (a === 'rep_check') { const r = find('reparos', t.dataset.id); if (r) { r.status = t.checked ? 'Concluído' : 'Pendente'; r.feito = t.checked; r.dataConc = t.checked ? hoje : ''; save(); render(); } }
   if (a === 'orcs') { const i = (S.orc.itens || []).find(x => x.id === t.dataset.id); if (i) { i.status = t.value; save(); render(); } }
+  if (a === 'orcf_sel') {
+    const i = (S.orc.itens || []).find(x => x.id === t.dataset.id);
+    if (i) {
+      i[t.dataset.f] = t.value;
+      save();
+      render();
+    }
+  }
   if (a === 'ae') { const item = find('aulas', t.dataset.id); if (item) { item[t.dataset.f] = t.value.trim(); save(); t.classList.toggle('miss', !t.value.trim()); } }
+  if (a === 'ae_sel') { const item = find('aulas', t.dataset.id); if (item) { item[t.dataset.f] = t.value; save(); } }
+  if (a === 'prof_perfil_upd') {
+    const key = t.dataset.key;
+    if (key && S.profPerfis && S.profPerfis[key]) {
+      S.profPerfis[key][t.dataset.f] = t.value;
+      save();
+    }
+  }
+  if (t.name === 'prof' && t.form && (t.form.dataset.form === 'aula' || t.form.dataset.form === 'aula_manual_nova')) {
+    const canon = typeof profCanon === 'function' ? profCanon(t.value) : t.value.trim();
+    const perfil = (S.profPerfis && canon) ? S.profPerfis[norm(canon)] : null;
+    if (perfil) {
+      const inpDesc = t.form.querySelector('input[name="desc"]');
+      const selTurno = t.form.querySelector('select[name="turno"]');
+      const inpTurma = t.form.querySelector('input[name="turma"]');
+      if (inpDesc && !inpDesc.value.trim() && perfil.disciplina) inpDesc.value = perfil.disciplina;
+      if (selTurno && !selTurno.value && perfil.turno) selTurno.value = perfil.turno;
+      if (inpTurma && !inpTurma.value.trim() && perfil.sala) inpTurma.value = perfil.sala;
+    }
+  }
   if (t.id === 'rem' && prev) prev.rem = t.checked;
   if (t.id === 'arquivoBackup' && t.files[0]) { processarRestauracao(t.files[0]); t.value = ''; }
   if (t.id === 'inputImagensPdf' && t.files.length) {
@@ -1468,7 +1701,7 @@ document.addEventListener('change', async e => {
     S.orc[t.dataset.orc] = t.value;
     save();
     if (t.dataset.orc === 'qtdTotal' && typeof orcTotals === 'function') orcTotals();
-    if (t.dataset.orc === 'link' || t.dataset.orc === 'fornecedor' || t.dataset.orc === 'data') render();
+    if (t.dataset.orc === 'link' || t.dataset.orc === 'fornecedor' || t.dataset.orc === 'data' || t.dataset.orc === 'categoria' || t.dataset.orc === 'unidade') render();
   }
 });
 
@@ -1479,8 +1712,36 @@ document.addEventListener('submit', e => {
   if (!f) return;
   const d = Object.fromEntries(new FormData(e.target)), id = uid();
   
-  if (f === 'aula') { S.aulas.push({ id, ...d, confirmada: false, destaque: 'nova', modificadoEm: new Date().toISOString() }); toast('Aula adicionada!'); }
+  if (f === 'aula') {
+    S.aulas.push({
+      id,
+      prof: (d.prof || '').trim(),
+      turma: (d.turma || '').trim(),
+      turno: (d.turno || '').trim(),
+      dia: d.dia,
+      hora: (d.hora || '').trim(),
+      desc: (d.desc || '').trim(),
+      confirmada: false,
+      destaque: 'nova',
+      modificadoEm: new Date().toISOString()
+    });
+    toast('Aula adicionada!');
+  }
   
+  if (f === 'prof_perfil') {
+    if (typeof salvarProfPerfil === 'function') {
+      const ok = salvarProfPerfil(d.nome, d.disciplina, d.turno, d.sala);
+      if (ok) {
+        save();
+        render();
+        toast('Ficha do professor salva!');
+      } else {
+        toast('Informe o nome do professor.');
+      }
+    }
+    return;
+  }
+
   // Submissão de Lembrete Rápido
   if (f === 'novo_lembrete') {
     const txt = (d.texto || '').trim();
@@ -1513,6 +1774,7 @@ document.addEventListener('submit', e => {
       id,
       turma,
       prof: d.prof.trim(),
+      turno: (d.turno || '').trim(),
       dia: d.dia,
       hora: d.hora.trim(),
       desc: (d.desc || '').trim(),
@@ -1576,6 +1838,7 @@ document.addEventListener('submit', e => {
       id,
       nome,
       qtd: (d.qtd || '1').trim(),
+      un: (d.un || 'un').trim(),
       valorUnd: (d.valorUnd || '0').trim(),
       status: 'Aguardando aprovação'
     });
@@ -1621,7 +1884,7 @@ function inicializarPainel() {
 if (typeof PriusBus !== 'undefined') {
   PriusBus.register(
     'app',
-    ['core', 'orcamento', 'operacional', 'aulas', 'hoje'],
+    ['core', 'presets', 'orcamento', 'operacional', 'aulas', 'hoje'],
     inicializarPainel,
     { dom: true }
   );

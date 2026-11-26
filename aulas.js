@@ -390,24 +390,55 @@ function uploadCard() {
   const aulasDaTurmaManual = turmaAtiva ? S.aulas.filter(a => norm(a.turma) === norm(turmaAtiva)) : [];
   aulasDaTurmaManual.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
 
-  const nomesProfList = [...new Set(S.aulas.map(a => (a.prof || '').trim()).filter(Boolean))].sort();
+  const perfisVals = Object.values((S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {}).map(p => (p && p.nome ? p.nome.trim() : '')).filter(Boolean);
+  const nomesProfList = [...new Set([
+    ...S.aulas.map(a => (a.prof || '').trim()),
+    ...(S.apelidos || []).map(a => (a.nome || '').trim()),
+    ...perfisVals
+  ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  const salasList = typeof getPresetList === 'function' ? getPresetList('professores', 'salas') : [];
+  const turnosList = typeof getPresetList === 'function' ? getPresetList('professores', 'turnos') : [];
+  const disciplinasList = typeof getPresetList === 'function' ? getPresetList('professores', 'disciplinas') : [];
+  const salasTurmasOpts = [...new Set([...turmasExist(), ...salasList])];
+  const optTurnoHtml = typeof renderPresetSelectOptions === 'function'
+    ? renderPresetSelectOptions(turnosList, '', 'Turno (Opc.)', true)
+    : `<option value="">Turno (Opc.)</option>` + turnosList.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  const gearBtn = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '⚙️', title) : '';
 
   let bodyNovo = `
     <div class="mu" style="margin-bottom:10px">Defina a nova turma e adicione aula por aula com todos os campos necessários:</div>
     
+    <datalist id="listaSalasTurmasNovo">${salasTurmasOpts.map(s => `<option value="${esc(s)}">`).join('')}</datalist>
     <div class="fx" style="align-items:center; margin-bottom:12px; background:var(--bg); padding:8px 10px; border-radius:8px; border:1px solid var(--bd);">
       <span style="font-weight:600; white-space:nowrap;">Turma Atual:</span>
-      <input id="campoNovaTurmaManual" placeholder="Digite o nome da nova turma (ex: RED ENF 2026)" value="${esc(novaTurmaManualNome)}" style="flex:2 1 220px; font-weight:600;">
+      <input id="campoNovaTurmaManual" list="listaSalasTurmasNovo" placeholder="Digite ou selecione turma / sala (ex: Sala 1, RED ENF 2026)" value="${esc(novaTurmaManualNome)}" style="flex:2 1 220px; font-weight:600;">
+      <div class="preset-field-wrap" style="flex:1 1 170px;">
+        <select id="selTurmaSalaPreset" style="flex:1;" aria-label="Escolher sala ou turma predefinida">
+          <option value="">Salas / Turmas padrão...</option>
+          ${salasList.map(s => `<option value="${esc(s)}" ${norm(s) === norm(novaTurmaManualNome) ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+        </select>
+        ${gearBtn('salas', 'Gerenciar Salas de Aula / Turmas')}
+      </div>
       ${turmaAtiva ? `<button class="b" data-act="limpar_turma_manual" style="font-size:12px;">Trocar Turma</button>` : ''}
     </div>
 
     ${turmaAtiva ? `
       <datalist id="listaProfsManual">${nomesProfList.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <datalist id="listaDisciplinasManual">${disciplinasList.map(d => `<option value="${esc(d)}">`).join('')}</datalist>
       <form data-form="aula_manual_nova">
         <input name="prof" list="listaProfsManual" placeholder="Professor (Obrigatório)" required style="flex:2 1 180px">
+        <div class="preset-field-wrap" style="flex:1 1 130px;">
+          <select name="turno" style="flex:1;" aria-label="Turno">
+            ${optTurnoHtml}
+          </select>
+          ${gearBtn('turnos', 'Gerenciar Turnos')}
+        </div>
         <input name="dia" type="date" value="${amanha}" required style="flex:1 1 130px" title="Data da Aula (Obrigatório)">
         <input name="hora" type="time" required style="flex:1 1 110px" title="Horário (Obrigatório)">
-        <input name="desc" placeholder="Disciplina / Conteúdo (Opcional)" style="flex:3 1 220px">
+        <div class="preset-field-wrap" style="flex:2.5 1 200px;">
+          <input name="desc" list="listaDisciplinasManual" placeholder="Disciplina / Conteúdo (Opcional)" style="flex:1;">
+          ${gearBtn('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+        </div>
         <button class="b p" style="white-space:nowrap;">➕ Inserir Aula</button>
       </form>
 
@@ -417,7 +448,7 @@ function uploadCard() {
           ${aulasDaTurmaManual.map(a => `
             <div class="row" style="padding:6px 8px; font-size:13px;">
               <div class="t">
-                <b>${esc(a.prof)} — ${wd(a.dia)} ${br(a.dia)} às ${esc(a.hora)}</b>
+                <b>${esc(a.prof)} — ${wd(a.dia)} ${br(a.dia)} às ${esc(a.hora)}${a.turno ? ` <span class="pill b" style="font-size:10px; padding:1px 6px; margin-left:4px;">${esc(a.turno)}</span>` : ''}</b>
                 ${a.desc ? `<span class="mu">${esc(a.desc)}</span>` : ''}
               </div>
               <button class="b danger" data-act="del_aula" data-id="${a.id}" style="font-size:11px; padding:2px 8px;">Excluir</button>
@@ -425,7 +456,7 @@ function uploadCard() {
           `).join('') || '<div class="empty">Nenhuma aula inserida para esta turma ainda. Preencha os campos acima para começar!</div>'}
         </div>
       </div>
-    ` : `<div class="empty" style="padding:14px 0;">Digite o nome da turma acima para liberar a inserção das aulas.</div>`}
+    ` : `<div class="empty" style="padding:14px 0;">Digite ou escolha a turma acima para liberar a inserção das aulas.</div>`}
   `;
 
   return card('Entrada de Cronogramas', modoNav + bodyNovo);
@@ -542,10 +573,24 @@ function viewAulas() {
   l.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
   
   const temDestaques = S.aulas.some(a => a.destaque);
+  const turnosList = typeof getPresetList === 'function' ? getPresetList('professores', 'turnos') : [];
+  const salasList = typeof getPresetList === 'function' ? getPresetList('professores', 'salas') : [];
+  const disciplinasList = typeof getPresetList === 'function' ? getPresetList('professores', 'disciplinas') : [];
+  const perfisVals = Object.values((S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {}).map(p => (p && p.nome ? p.nome.trim() : '')).filter(Boolean);
+  const profsOpts = [...new Set([
+    ...S.aulas.map(a => (a.prof || '').trim()),
+    ...(S.apelidos || []).map(a => (a.nome || '').trim()),
+    ...perfisVals
+  ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  const salasTurmasOpts = [...new Set([...turmasExist(), ...salasList])];
+  const optTurnoHtml = (sel = '') => typeof renderPresetSelectOptions === 'function'
+    ? renderPresetSelectOptions(turnosList, sel, 'Turno...', true)
+    : `<option value="">Turno...</option>` + turnosList.map(v => `<option value="${esc(v)}" ${norm(v) === norm(sel) ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  const gearBtn = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '⚙️', title) : '';
 
   const aulaEdit = a => {
     const semProf = !a.prof || a.prof.trim() === '' || norm(a.prof) === norm('(sem professor)');
-    const f = (k, ph) => `<input class="obs ${a[k] ? '' : 'miss'}" style="margin:0; width:100%;" data-act="ae" data-id="${a.id}" data-f="${k}" placeholder="${ph}" value="${esc(a[k])}" title="${ph}">`;
+    const f = (k, ph, listId = '') => `<input class="obs ${a[k] ? '' : 'miss'}" style="margin:0; width:100%;" data-act="ae" data-id="${a.id}" data-f="${k}" ${listId ? `list="${listId}"` : ''} placeholder="${ph}" value="${esc(a[k])}" title="${ph}">`;
     const bdg = (!a.confirmada && a.destaque) ? `<span class="pill ${a.destaque === 'nova' ? 'o' : 'w'}" style="margin-left:6px">${a.destaque.toUpperCase()}</span>` : '';
     const alertSemProf = semProf ? `<span class="pill w" style="margin-left:6px; font-size:11px;">⚠️ Definir Professor</span>` : '';
 
@@ -555,10 +600,13 @@ function viewAulas() {
         <div class="t" style="flex:1 1 260px">
           <b>${wd(a.dia)} ${br(a.dia)} ${bdg} ${alertSemProf}</b>
           <div class="aula-grid-inputs">
-            ${f('prof', 'Docente / Professor')}
-            ${f('turma', 'Turma')}
+            ${f('prof', 'Docente / Professor', 'listaProfsQuadro')}
+            ${f('turma', 'Turma / Sala', 'listaSalasTurmasQuadro')}
             ${f('hora', 'Horário')}
-            ${f('desc', 'Descrição / Conteúdo')}
+            <select class="obs" style="margin:0; width:100%;" data-act="ae_sel" data-id="${a.id}" data-f="turno" title="Turno">
+              ${optTurnoHtml(a.turno || '')}
+            </select>
+            ${f('desc', 'Disciplina / Conteúdo', 'listaDisciplinasQuadro')}
           </div>
         </div>
         <label class="pill ${a.materialPronto ? 'o' : 'w'}" title="Marcar material (slide) como enviado">
@@ -569,7 +617,7 @@ function viewAulas() {
     `;
   };
 
- let searchHtml = `
+  let searchHtml = `
     <div class="fx" style="align-items:center;">
       <input id="buscaAulas" type="search" placeholder="Pesquisar por prof, turma, data (ex: 31/10), horário..." value="${esc(buscaAulas)}" style="flex:2 1 240px;" autocomplete="off">
       <button class="b" data-act="past">${showPast ? 'Ocultar passadas' : 'Mostrar passadas'}</button>
@@ -579,8 +627,34 @@ function viewAulas() {
     <div id="listaAulas">${l.map(aulaEdit).join('') || '<div class="empty">Nenhuma aula encontrada para esta pesquisa.</div>'}</div>
   `;
 
+  const formNovaAula = `
+    <datalist id="listaProfsQuadro">${profsOpts.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
+    <datalist id="listaSalasTurmasQuadro">${salasTurmasOpts.map(s => `<option value="${esc(s)}">`).join('')}</datalist>
+    <datalist id="listaDisciplinasQuadro">${disciplinasList.map(d => `<option value="${esc(d)}">`).join('')}</datalist>
+    <form data-form="aula" id="formNovaAulaAvulsa">
+      <input name="prof" list="listaProfsQuadro" placeholder="Professor" required style="flex:1.5 1 160px;">
+      <div class="preset-field-wrap" style="flex:1.4 1 160px;">
+        <input name="turma" list="listaSalasTurmasQuadro" placeholder="Turma / Sala" required style="flex:1;">
+        ${gearBtn('salas', 'Gerenciar Salas de Aula / Turmas')}
+      </div>
+      <div class="preset-field-wrap" style="flex:1 1 130px;">
+        <select name="turno" style="flex:1;" aria-label="Turno">
+          ${optTurnoHtml('')}
+        </select>
+        ${gearBtn('turnos', 'Gerenciar Turnos')}
+      </div>
+      <input name="dia" type="date" value="${amanha}" required style="flex:1 1 130px;">
+      <input name="hora" type="time" required style="flex:1 1 105px;">
+      <div class="preset-field-wrap" style="flex:1.8 1 180px;">
+        <input name="desc" list="listaDisciplinasQuadro" placeholder="Disciplina / Conteúdo" style="flex:1;">
+        ${gearBtn('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+      </div>
+      <button class="b p" style="white-space:nowrap;">Adicionar</button>
+    </form>
+  `;
+
   return subNav + 
-         card('Nova aula avulsa', `<form data-form="aula"><input name="prof" placeholder="Professor" required><input name="turma" placeholder="Turma" required><input name="dia" type="date" value="${amanha}" required><input name="hora" type="time" required><input name="desc" placeholder="Descrição"><button class="b p">Adicionar</button></form>`) + 
+         card('Nova aula avulsa', formNovaAula) + 
          card('Quadro Geral de Aulas', searchHtml);
 }
 

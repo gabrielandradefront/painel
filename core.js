@@ -280,10 +280,62 @@ function normalizarEstado(raw) {
   obj.docs = obj.docs || {};
   obj.cat = obj.cat || {};
   obj.meta = obj.meta || {};
-  obj.orc = (obj.orc && typeof obj.orc === 'object') ? obj.orc : { inst: 'Prius', modo: 'comparativo_fornecedores', titulo: '', fornecedor: '', link: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
+  obj.profPerfis = (obj.profPerfis && typeof obj.profPerfis === 'object' && !Array.isArray(obj.profPerfis)) ? obj.profPerfis : {};
+  obj.presets = (obj.presets && typeof obj.presets === 'object') ? obj.presets : {};
+  
+  const defaultPresets = {
+    reparos: {
+      locais: ['Hall', 'Recepção', 'Copa', 'Copinha', 'Corredor', 'Nárnia', 'Banheiro', 'Coordenação', 'Sala 1', 'Sala 2', 'Sala 3', 'Almoxarife', 'Estúdio', 'Sala de descanso'],
+      categorias: ['Elétrica', 'Hidráulica', 'Pintura', 'Ar Condicionado', 'Mobiliário', 'Tecnologia / Rede', 'Limpeza', 'Outros'],
+      prestadores: ['Equipe Interna', 'Manutenção Predial', 'Técnico de Ar', 'Eletricista Plantão', 'TI / Suporte']
+    },
+    professores: {
+      turnos: ['Manhã', 'Tarde', 'Noite', 'Integral'],
+      salas: ['Sala 1', 'Sala 2', 'Sala 3', 'Estúdio 1', 'Estúdio 2', 'Auditório'],
+      disciplinas: ['Raciocínio Lógico', 'Matemática', 'Português', 'Redação', 'Biologia', 'Química', 'Física', 'História', 'Geografia', 'Inglês']
+    },
+    orcamentos: {
+      fornecedores: [
+        { nome: 'Kalunga', link: 'https://www.kalunga.com.br' },
+        { nome: 'Amazon', link: 'https://www.amazon.com.br' },
+        { nome: 'Atacadão', link: 'https://www.atacadao.com.br' },
+        { nome: 'Mercado Livre', link: 'https://www.mercadolivre.com.br' }
+      ],
+      categorias: ['Material de Escritório', 'Limpeza', 'Manutenção', 'Tecnologia', 'Alimentação', 'Divulgação', 'Geral'],
+      unidades: ['un', 'cx', 'pct', 'resma', 'kit', 'kg', 'litro', 'm', 'par', 'rolo']
+    },
+    notas: {
+      etiquetas: ['Urgente', 'Reunião', 'Financeiro', 'Pedagógico', 'Manutenção', 'Pessoal', 'Prazo']
+    }
+  };
+
+  ['reparos', 'professores', 'orcamentos', 'notas'].forEach(cat => {
+    obj.presets[cat] = obj.presets[cat] && typeof obj.presets[cat] === 'object' ? obj.presets[cat] : {};
+    const targetCat = obj.presets[cat];
+    const sourceCat = defaultPresets[cat];
+    Object.keys(sourceCat).forEach(sub => {
+      if (!Array.isArray(targetCat[sub])) {
+        targetCat[sub] = JSON.parse(JSON.stringify(sourceCat[sub]));
+      }
+    });
+  });
+
+  if (Array.isArray(obj.presets.orcamentos.fornecedores)) {
+    obj.presets.orcamentos.fornecedores = obj.presets.orcamentos.fornecedores
+      .map(f => {
+        if (typeof f === 'string') return { nome: f.trim(), link: '' };
+        if (f && typeof f === 'object') return { nome: String(f.nome || '').trim(), link: String(f.link || '').trim() };
+        return null;
+      })
+      .filter(f => f && f.nome);
+  }
+
+  obj.orc = (obj.orc && typeof obj.orc === 'object') ? obj.orc : { inst: 'Prius', modo: 'comparativo_fornecedores', titulo: '', fornecedor: '', link: '', categoria: '', unidade: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
   obj.orc.modo = obj.orc.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
   if (typeof obj.orc.fornecedor !== 'string') obj.orc.fornecedor = '';
   if (typeof obj.orc.link !== 'string') obj.orc.link = '';
+  if (typeof obj.orc.categoria !== 'string') obj.orc.categoria = '';
+  if (typeof obj.orc.unidade !== 'string') obj.orc.unidade = '';
   if (!Array.isArray(obj.orc.itens)) obj.orc.itens = [];
 
   obj.orc.itens.forEach(i => {
@@ -322,6 +374,16 @@ try {
   S = normalizarEstado(JSON.parse(bruto));
 } catch (e) {
   S = normalizarEstado({});
+}
+
+if (typeof globalThis !== 'undefined' && !Object.prototype.hasOwnProperty.call(globalThis, 'appPresets')) {
+  try {
+    Object.defineProperty(globalThis, 'appPresets', {
+      get() { return (typeof S !== 'undefined' && S && S.presets) ? S.presets : {}; },
+      set(v) { if (typeof S !== 'undefined' && S && v && typeof v === 'object') S.presets = v; },
+      configurable: true
+    });
+  } catch (e) {}
 }
 
 // Variáveis globais de controle de navegação, filtros e notificações

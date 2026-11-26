@@ -291,14 +291,39 @@ function sugApelidos() {
   );
 }
 
+function salvarProfPerfil(nome, disciplina = '', turno = '', sala = '') {
+  const nomeLimpo = (nome || '').trim();
+  if (!nomeLimpo) return false;
+  const canon = typeof profCanon === 'function' ? profCanon(nomeLimpo) : nomeLimpo;
+  const key = norm(canon);
+  if (!key) return false;
+  S.profPerfis = (S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {};
+  const atual = S.profPerfis[key] || { nome: canon, disciplina: '', turno: '', sala: '' };
+  S.profPerfis[key] = {
+    nome: canon,
+    disciplina: String(disciplina ?? atual.disciplina ?? '').trim(),
+    turno: String(turno ?? atual.turno ?? '').trim(),
+    sala: String(sala ?? atual.sala ?? '').trim()
+  };
+  return true;
+}
+
 function cardApelidos() {
   const sug = sugApelidos();
   const ap = S.apelidos || [];
   const apOrd = [...ap].sort((a, b) =>
     (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
   );
-  const nomes = [...new Set([...nomesProf(), ...ap.map(e => (e.nome || '').trim()).filter(Boolean)])]
-    .sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  const perfisMap = (S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {};
+  const perfisOrd = Object.entries(perfisMap)
+    .filter(([, p]) => p && p.nome)
+    .sort(([, a], [, b]) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
+
+  const nomes = [...new Set([
+    ...nomesProf(),
+    ...ap.map(e => (e.nome || '').trim()),
+    ...perfisOrd.map(([, p]) => (p.nome || '').trim())
+  ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
 
   const mapaOficiais = new Map(ap.map(e => [norm(e.nome), e]));
   const mapaAlts = new Map();
@@ -316,9 +341,73 @@ function cardApelidos() {
     return `<option value="${esc(n)}"></option>`;
   }).join('');
 
+  const disciplinasList = typeof getPresetList === 'function' ? getPresetList('professores', 'disciplinas') : [];
+  const turnosList = typeof getPresetList === 'function' ? getPresetList('professores', 'turnos') : [];
+  const salasList = typeof getPresetList === 'function' ? getPresetList('professores', 'salas') : [];
+  const optHtml = (list, sel, ph) => typeof renderPresetSelectOptions === 'function'
+    ? renderPresetSelectOptions(list, sel, ph, true)
+    : `<option value="">${esc(ph)}</option>` + list.map(v => `<option value="${esc(v)}" ${norm(v) === norm(sel) ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  const gear = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '⚙️', title) : '';
+
   const aberto = typeof apelidosAberto !== 'undefined' ? apelidosAberto : false;
 
-  let h = `<div class="mu" style="margin-bottom:8px">Una os nomes diferentes de um mesmo professor (ex.: “Hugo” e “Hugo Lemos”) para que entrem num só contrato e num só recibo por dia.</div>`;
+  let h = `
+    <div style="margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--bd);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+        <h3 style="margin:0;">📋 Ficha de Professores (Disciplina / Área, Turno & Sala)</h3>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          ${gear('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+          ${gear('turnos', 'Gerenciar Turnos')}
+          ${gear('salas', 'Gerenciar Salas de Aula / Turmas')}
+        </div>
+      </div>
+      <div class="mu" style="margin-bottom:10px; font-size:12.5px;">Vincule área de atuação/disciplina, turno e sala ou turma padrão para cada docente.</div>
+      <datalist id="profsFichaList">${nomes.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <form data-form="prof_perfil" class="prof-ficha-form">
+        <input name="nome" list="profsFichaList" placeholder="Nome do professor(a)..." required autocomplete="off" style="flex:2 1 180px;">
+        <div class="preset-field-wrap" style="flex:1.5 1 170px;">
+          <select name="disciplina" style="flex:1;" aria-label="Disciplina ou área de atuação">
+            ${optHtml(disciplinasList, '', 'Disciplina / Área...')}
+          </select>
+          ${gear('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+        </div>
+        <div class="preset-field-wrap" style="flex:1 1 130px;">
+          <select name="turno" style="flex:1;" aria-label="Turno">
+            ${optHtml(turnosList, '', 'Turno...')}
+          </select>
+          ${gear('turnos', 'Gerenciar Turnos')}
+        </div>
+        <div class="preset-field-wrap" style="flex:1.2 1 150px;">
+          <select name="sala" style="flex:1;" aria-label="Sala ou turma padrão">
+            ${optHtml(salasList, '', 'Sala / Turma...')}
+          </select>
+          ${gear('salas', 'Gerenciar Salas / Turmas')}
+        </div>
+        <button class="b p" style="white-space:nowrap;">💾 Salvar Ficha</button>
+      </form>
+      <div style="margin-top:10px;">
+        ${perfisOrd.map(([key, p]) => `
+          <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="t" style="min-width:160px; flex:1.2 1 160px;">
+              <b>${esc(p.nome)}</b>
+            </div>
+            <select class="obs" style="margin:0; flex:1.3 1 150px;" data-act="prof_perfil_upd" data-key="${esc(key)}" data-f="disciplina" title="Disciplina / Área de Atuação">
+              ${optHtml(disciplinasList, p.disciplina || '', 'Disciplina / Área...')}
+            </select>
+            <select class="obs" style="margin:0; flex:1 1 115px;" data-act="prof_perfil_upd" data-key="${esc(key)}" data-f="turno" title="Turno">
+              ${optHtml(turnosList, p.turno || '', 'Turno...')}
+            </select>
+            <select class="obs" style="margin:0; flex:1.1 1 130px;" data-act="prof_perfil_upd" data-key="${esc(key)}" data-f="sala" title="Sala / Turma padrão">
+              ${optHtml(salasList, p.sala || '', 'Sala / Turma...')}
+            </select>
+            <button type="button" class="b danger" data-act="del_prof_perfil" data-key="${esc(key)}" style="font-size:11px; padding:3px 8px;" title="Remover ficha">✕</button>
+          </div>
+        `).join('') || '<div class="empty" style="padding:10px 0;">Nenhuma ficha de professor cadastrada ainda.</div>'}
+      </div>
+    </div>
+  `;
+
+  h += `<div class="mu" style="margin-bottom:8px">Una os nomes diferentes de um mesmo professor (ex.: “Hugo” e “Hugo Lemos”) para que entrem num só contrato e num só recibo por dia.</div>`;
 
   if (sug.length) {
     h += `<h3>Sugestões (${sug.length})</h3>` +
@@ -349,18 +438,16 @@ function cardApelidos() {
     : '';
 
   return `
-    <div class="card accordion-card ${aberto ? 'open' : ''}">
-      <div class="accordion-header" data-act="toggle_apelidos_box" role="button" tabindex="0" aria-expanded="${aberto ? 'true' : 'false'}">
-        <div class="accordion-title-wrap">
-          <h2>👥 Gestão de Professores (Apelidos)</h2>
-          <span class="pill ${apOrd.length > 0 ? 'o' : ''}">${apOrd.length} cadastrado(s)</span>
+    <div class="settings-professores-section">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <h2 style="margin:0;">👥 Gestão de Professores (Fichas & Apelidos)</h2>
+          <span class="pill ${perfisOrd.length > 0 ? 'o' : ''}">${perfisOrd.length} ficha(s)</span>
+          <span class="pill ${apOrd.length > 0 ? 'o' : ''}">${apOrd.length} unido(s)</span>
           ${badgeSug}
         </div>
-        <span class="accordion-arrow" aria-hidden="true">${typeof icoSeta === 'function' ? icoSeta('down', 16) : (aberto ? '▲' : '▼')}</span>
       </div>
-      <div class="accordion-body ${aberto ? 'open' : ''}">
-        ${h}
-      </div>
+      ${h}
     </div>
   `;
 }
@@ -969,12 +1056,16 @@ function viewOperacional() {
       </div>
     `;
 
+    let locaisOpts = typeof getPresetList === 'function' ? getPresetList('reparos', 'locais') : LOCAIS_MANUTENCAO;
     let repFormHtml = `
       <form data-form="reparo">
-        <select name="local" required style="flex:1 1 150px">
-          <option value="">Selecione o local...</option>
-          ${LOCAIS_MANUTENCAO.map(loc => `<option value="${esc(loc)}">${esc(loc)}</option>`).join('')}
-        </select>
+        <div style="display:flex; align-items:center; flex:1 1 180px; gap:4px;">
+          <select name="local" required style="flex:1;">
+            <option value="">Selecione o local...</option>
+            ${locaisOpts.map(loc => `<option value="${esc(loc)}">${esc(loc)}</option>`).join('')}
+          </select>
+          ${typeof presetGearBtn === 'function' ? presetGearBtn('reparos', 'locais') : ''}
+        </div>
         <input name="item" placeholder="Problema (ex: Lâmpada queimada, tomada sem energia)" required style="flex:2 1 220px">
         <button class="b p">Adicionar Chamado</button>
         <button type="button" class="b" data-act="rel">📋 Copiar Relatório</button>

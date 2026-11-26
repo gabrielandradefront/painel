@@ -504,15 +504,17 @@ async function orcXlsx() {
 
   if (modo === 'pedido_fornecedor') {
     const fornecedorNome = (S.orc.fornecedor || 'Fornecedor não informado').trim();
+    const catTxt = (S.orc.categoria || '').trim();
     const totalPedido = orcTotalReferencia(S.orc);
     if (typeof window.ExcelJS === 'undefined') {
-      let csv = '\uFEFFItem;Quantidade;Valor Unitário;Subtotal\n';
+      let csv = '\uFEFFItem;Quantidade;Unidade;Valor Unitário;Subtotal\n';
       itens.forEach(i => {
         const q = orcItemQtd(i);
+        const un = (i.un || 'un').trim();
         const vu = num(i.valorUnd);
-        csv += `"${(i.nome || '').replace(/"/g, '""')}";"${q}";"${brl(vu)}";"${brl(q * vu)}"\n`;
+        csv += `"${(i.nome || '').replace(/"/g, '""')}";"${q}";"${un.replace(/"/g, '""')}";"${brl(vu)}";"${brl(q * vu)}"\n`;
       });
-      csv += `"TOTAL DO PEDIDO";"";"";"${brl(totalPedido)}"\n`;
+      csv += `"TOTAL DO PEDIDO";"";"";"";"${brl(totalPedido)}"\n`;
       await salvarArquivo(`pedido-${slugTitulo}-${iso(agora)}.csv`, new TextEncoder().encode(csv), 'text/csv;charset=utf-8;');
       toast('Planilha CSV do pedido exportada com sucesso!');
       return;
@@ -528,60 +530,62 @@ async function orcXlsx() {
         views: [{ state: 'frozen', ySplit: 6, showGridLines: false }]
       });
 
-      ws.mergeCells('A1:D1');
+      ws.mergeCells('A1:E1');
       ws.getCell('A1').value = 'ARGOS OPS  •  PEDIDO DE COMPRA (FORNECEDOR ÚNICO)';
       ws.getCell('A1').font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
       ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF121316' } };
       ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
       ws.getRow(1).height = 32;
 
-      ws.mergeCells('A2:D2');
-      ws.getCell('A2').value = `Fornecedor: ${fornecedorNome}   |   Referência: ${tituloRaw}   |   Data: ${dataCotacao}   |   Exportado em: ${geradoEm}`;
+      ws.mergeCells('A2:E2');
+      ws.getCell('A2').value = `Fornecedor: ${fornecedorNome}   |   Referência: ${tituloRaw}${catTxt ? `   |   Categoria: ${catTxt}` : ''}   |   Data: ${dataCotacao}   |   Exportado em: ${geradoEm}`;
       ws.getCell('A2').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFBBF24' } };
       ws.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B1E26' } };
       ws.getCell('A2').alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
       ws.getRow(2).height = 22;
 
-      ws.mergeCells('A3:D3');
+      ws.mergeCells('A3:E3');
       ws.getCell('A3').value = `Link: ${S.orc.link || 'Não informado'}   |   Obs: ${S.orc.obs || '—'}`;
       ws.getCell('A3').font = { name: 'Calibri', size: 9.5, color: { argb: 'FF475569' } };
       ws.getRow(3).height = 18;
       ws.getRow(4).height = 8;
 
       const hdr = ws.getRow(5);
-      hdr.values = ['Item do Pedido', 'Quantidade', 'Valor Unitário (R$)', 'Subtotal (R$)'];
+      hdr.values = ['Item do Pedido', 'Quantidade', 'Unidade', 'Valor Unitário (R$)', 'Subtotal (R$)'];
       hdr.height = 24;
       hdr.eachCell((cell, col) => {
         cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-        cell.alignment = { vertical: 'middle', horizontal: col === 1 ? 'left' : 'right', indent: col === 1 ? 1 : 0 };
+        cell.alignment = { vertical: 'middle', horizontal: col === 1 ? 'left' : (col === 3 ? 'center' : 'right'), indent: col === 1 ? 1 : 0 };
       });
 
       const firstRow = 6;
       itens.forEach((i, idx) => {
         const rNum = firstRow + idx;
         const q = orcItemQtd(i);
+        const un = (i.un || 'un').trim();
         const vu = num(i.valorUnd);
         const row = ws.getRow(rNum);
-        row.values = [i.nome || 'Item', q, vu, { formula: `B${rNum}*C${rNum}`, result: q * vu }];
+        row.values = [i.nome || 'Item', q, un, vu, { formula: `B${rNum}*D${rNum}`, result: q * vu }];
         row.height = 22;
         row.getCell(2).numFmt = '#,##0.##';
-        row.getCell(3).numFmt = '"R$ "#,##0.00';
+        row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
         row.getCell(4).numFmt = '"R$ "#,##0.00';
-        row.getCell(4).font = { name: 'Calibri', size: 10, bold: true };
+        row.getCell(5).numFmt = '"R$ "#,##0.00';
+        row.getCell(5).font = { name: 'Calibri', size: 10, bold: true };
       });
 
       const lastRow = firstRow + itens.length - 1;
       const totRow = ws.getRow(lastRow + 1);
-      totRow.values = ['TOTAL DO PEDIDO', { formula: `SUM(B${firstRow}:B${lastRow})` }, '', { formula: `SUM(D${firstRow}:D${lastRow})`, result: totalPedido }];
+      totRow.values = ['TOTAL DO PEDIDO', { formula: `SUM(B${firstRow}:B${lastRow})` }, '', '', { formula: `SUM(E${firstRow}:E${lastRow})`, result: totalPedido }];
       totRow.height = 26;
       totRow.eachCell((cell, col) => {
         cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF065F46' } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFDF5' } };
-        if (col === 4) cell.numFmt = '"R$ "#,##0.00';
+        if (col === 5) cell.numFmt = '"R$ "#,##0.00';
       });
 
-      ws.columns = [{ width: 42 }, { width: 14 }, { width: 20 }, { width: 20 }];
+      ws.columns = [{ width: 40 }, { width: 14 }, { width: 12 }, { width: 20 }, { width: 20 }];
       const buffer = await wb.xlsx.writeBuffer();
       const ok = await salvarArquivo(
         `pedido-${slugTitulo}-${iso(agora)}.xlsx`,
@@ -688,7 +692,10 @@ async function orcXlsx() {
     // --- LINHA 2: SUBTÍTULO COM METADADOS ---
     ws.mergeCells('A2:I2');
     const cSub = ws.getCell('A2');
-    cSub.value = `Objeto: ${tituloRaw}   |   Data: ${dataCotacao}   |   Qtd. Itens: ${qtdTotal > 0 ? qtdTotal : 'Não informada'}   |   Exportado em: ${geradoEm}`;
+    const catComp = (S.orc.categoria || '').trim();
+    const unComp = (S.orc.unidade || '').trim();
+    const qtdDisplay = qtdTotal > 0 ? `${qtdTotal}${unComp ? ' ' + unComp : ''}` : 'Não informada';
+    cSub.value = `Objeto: ${tituloRaw}${catComp ? `   |   Categoria: ${catComp}` : ''}   |   Data: ${dataCotacao}   |   Qtd. Itens: ${qtdDisplay}   |   Exportado em: ${geradoEm}`;
     cSub.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: C_AMBER_LIGHT } };
     cSub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_SLATE_SUB } };
     cSub.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
@@ -1106,20 +1113,25 @@ function orcCopy() {
   if (modo === 'pedido_fornecedor') {
     const forn = S.orc.fornecedor || 'Fornecedor';
     let txt = `*PEDIDO DE COMPRA — ${forn}${S.orc.titulo ? ' (' + S.orc.titulo + ')' : ''} — ${br(S.orc.data || hoje)}*\n`;
+    if (S.orc.categoria) txt += `🏷️ Categoria: ${S.orc.categoria}\n`;
     if (S.orc.link) txt += `🔗 Link: ${S.orc.link}\n`;
     if (S.orc.obs) txt += `📝 Obs: ${S.orc.obs}\n`;
     txt += '\n';
     itens.forEach((i, idx) => {
       const q = orcItemQtd(i);
+      const un = (i.un || 'un').trim();
       const vu = num(i.valorUnd);
-      txt += `${idx + 1}. *${i.nome || 'Item'}* — ${q}x ${brl(vu)} = *${brl(q * vu)}*\n`;
+      txt += `${idx + 1}. *${i.nome || 'Item'}* — ${q} ${un} x ${brl(vu)} = *${brl(q * vu)}*\n`;
     });
     txt += `\n💰 *Valor Total do Pedido:* ${brl(orcTotalReferencia(S.orc))}`;
     copy(txt);
     return;
   }
 
-  let txt = `*COTAÇÃO - ${S.orc.titulo || 'ARGOS OPS'} (${br(S.orc.data || hoje)})*\n\n`;
+  let txt = `*COTAÇÃO - ${S.orc.titulo || 'ARGOS OPS'} (${br(S.orc.data || hoje)})*\n`;
+  if (S.orc.categoria) txt += `🏷️ Categoria: ${S.orc.categoria}\n`;
+  if (S.orc.qtdTotal) txt += `📏 Quantidade: ${S.orc.qtdTotal}${S.orc.unidade ? ' ' + S.orc.unidade : ''}\n`;
+  txt += '\n';
   itens.forEach((i, idx) => {
     txt += `${idx + 1}. *${i.forn || 'Fornecedor'}*\n`;
     txt += `   • Sem frete: ${brl(itemPrecoSemFrete(i))} | Frete: ${brl(itemFrete(i))}\n`;
@@ -1184,12 +1196,32 @@ function viewOrc() {
     </div>
   `;
 
+  const favFornecedores = typeof getPresetList === 'function' ? getPresetList('orcamentos', 'fornecedores') : [];
+  const catOrcList = typeof getPresetList === 'function' ? getPresetList('orcamentos', 'categorias') : [];
+  const unOrcList = typeof getPresetList === 'function' ? getPresetList('orcamentos', 'unidades') : [];
+  const optPreset = (list, sel, ph, vazio = true) => typeof renderPresetSelectOptions === 'function'
+    ? renderPresetSelectOptions(list, sel, ph, vazio)
+    : (vazio ? `<option value="">${esc(ph)}</option>` : '') + list.map(v => {
+        const val = typeof v === 'string' ? v : (v && v.nome ? v.nome : '');
+        return `<option value="${esc(val)}" ${norm(val) === norm(sel) ? 'selected' : ''}>${esc(val)}</option>`;
+      }).join('');
+  const orcGear = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('orcamentos', sub, '⚙️', title) : '';
+  const datalistFornecedores = `
+    <datalist id="listaFornecedoresFavoritos">
+      ${favFornecedores.map(f => {
+        const nomeF = typeof f === 'string' ? f : (f && f.nome ? f.nome : '');
+        return `<option value="${esc(nomeF)}"></option>`;
+      }).join('')}
+    </datalist>
+  `;
+
   let slide1 = '';
 
   if (ehPedido) {
     // --- MODO: VÁRIOS ITENS • 1 FORNECEDOR ---
     const linkFornecedor = (S.orc.link || '').trim();
     const domFornecedor = extrairDominio(linkFornecedor);
+    const unPadraoForm = unOrcList.includes('un') ? 'un' : (unOrcList[0] || 'un');
 
     const linhasPedido = itens.map(i => {
       const sub = orcItemSubtotal(i, modo);
@@ -1200,8 +1232,13 @@ function viewOrc() {
             <input class="obs" style="margin:0; width:100%;" data-act="orcf" data-id="${i.id}" data-f="nome" value="${esc(i.nome || '')}" placeholder="Nome do item">
             <div id="ocmp-${i.id}" class="orc-cmp-slot">${cmpHtml}</div>
           </td>
-          <td style="padding:10px 8px; width:110px;">
-            <input class="obs" style="margin:0; width:90px; text-align:right;" data-act="orcf" data-id="${i.id}" data-f="qtd" value="${esc(i.qtd ?? '1')}" placeholder="1">
+          <td style="padding:10px 8px; width:100px;">
+            <input class="obs" style="margin:0; width:82px; text-align:right;" data-act="orcf" data-id="${i.id}" data-f="qtd" value="${esc(i.qtd ?? '1')}" placeholder="1">
+          </td>
+          <td style="padding:10px 8px; width:100px;">
+            <select class="obs" style="margin:0; width:88px; padding:4px 6px;" data-act="orcf_sel" data-id="${i.id}" data-f="un" title="Unidade de medida">
+              ${optPreset(unOrcList, i.un || 'un', 'Unid.', false)}
+            </select>
           </td>
           <td style="padding:10px 8px; width:130px;">
             <input class="obs" style="margin:0; width:110px; text-align:right;" data-act="orcf" data-id="${i.id}" data-f="valorUnd" value="${esc(i.valorUnd ?? '')}" placeholder="0,00">
@@ -1218,12 +1255,31 @@ function viewOrc() {
 
     slide1 = `
       <div style="flex: 0 0 100%; min-width: 100%;">
+        ${datalistFornecedores}
         <div class="card" style="margin-bottom:14px;">
           <h2>Tipo e Dados do Pedido</h2>
           ${seletorModoHtml}
           <div class="fx" style="gap:10px; margin-top:12px;">
-            <input data-orc="fornecedor" placeholder="Nome do Fornecedor / Loja (ex: Kalunga, Amazon, Atacadão)" value="${esc(S.orc.fornecedor || '')}" style="flex:2 1 220px;">
-            <input data-orc="titulo" placeholder="Referência / Título do Pedido (ex: Material de Escritório)" value="${esc(S.orc.titulo || '')}" style="flex:2 1 200px;">
+            <div class="preset-field-wrap" style="flex:1.5 1 195px;">
+              <select id="orcFornecedorPresetSelect" style="flex:1;" title="Selecionar Fornecedor Favorito (preenche nome e link automaticamente)" aria-label="Fornecedor Favorito">
+                <option value="">⚡ Fornecedor favorito...</option>
+                ${favFornecedores.map((f, idx) => {
+                  const nomeF = typeof f === 'string' ? f : (f && f.nome ? f.nome : '');
+                  const linkF = (f && typeof f === 'object' && f.link) ? f.link : '';
+                  const sel = norm(S.orc.fornecedor || '') === norm(nomeF);
+                  return `<option value="${idx}" ${sel ? 'selected' : ''}>${esc(nomeF)}${linkF ? ' 🔗' : ''}</option>`;
+                }).join('')}
+              </select>
+              ${orcGear('fornecedores', 'Gerenciar Fornecedores Favoritos')}
+            </div>
+            <input data-orc="fornecedor" list="listaFornecedoresFavoritos" placeholder="Nome do Fornecedor / Loja (ex: Kalunga, Amazon)" value="${esc(S.orc.fornecedor || '')}" style="flex:2 1 210px;">
+            <input data-orc="titulo" placeholder="Referência / Título do Pedido (ex: Material de Escritório)" value="${esc(S.orc.titulo || '')}" style="flex:2 1 190px;">
+            <div class="preset-field-wrap" style="flex:1.4 1 175px;">
+              <select data-orc="categoria" style="flex:1;" aria-label="Categoria ou Centro de Custo" title="Categoria / Centro de Custo">
+                ${optPreset(catOrcList, S.orc.categoria || '', 'Categoria / Centro de Custo...', true)}
+              </select>
+              ${orcGear('categorias', 'Gerenciar Categorias / Centros de Custo')}
+            </div>
             <input data-orc="data" type="date" value="${S.orc.data || hoje}" style="flex:1 1 135px;">
           </div>
           <div class="fx" style="gap:10px; margin-top:10px; align-items:center;">
@@ -1239,8 +1295,14 @@ function viewOrc() {
         <div class="card" style="margin-bottom:14px;">
           <h2>Adicionar Item ao Pedido</h2>
           <form data-form="orc_pedido_item" id="formNovoItemPedido">
-            <input name="nome" id="ped_nomeItem" placeholder="Nome do item (ex: Resma A4, Marcador Quadro, Pilha AA)" required style="flex:3 1 240px;">
-            <input name="qtd" id="ped_qtdItem" placeholder="Qtd." value="1" required style="flex:1 1 85px;">
+            <input name="nome" id="ped_nomeItem" placeholder="Nome do item (ex: Resma A4, Marcador Quadro, Pilha AA)" required style="flex:3 1 220px;">
+            <input name="qtd" id="ped_qtdItem" placeholder="Qtd." value="1" required style="flex:1 1 80px;">
+            <div class="preset-field-wrap" style="flex:1 1 115px;">
+              <select name="un" id="ped_unItem" style="flex:1;" aria-label="Unidade de medida" title="Unidade de Medida">
+                ${optPreset(unOrcList, unPadraoForm, 'Unid.', false)}
+              </select>
+              ${orcGear('unidades', 'Gerenciar Unidades de Medida')}
+            </div>
             <input name="valorUnd" id="ped_valorUnd" placeholder="Valor Unitário (R$)" required style="flex:1 1 130px;">
             <button class="b p" style="white-space:nowrap;">➕ Adicionar item</button>
           </form>
@@ -1262,14 +1324,15 @@ function viewOrc() {
               <thead>
                 <tr style="border-bottom:2px solid var(--bd); color:var(--mu);">
                   <th style="padding:8px;">Nome do Item</th>
-                  <th style="padding:8px; text-align:right;">Quantidade</th>
+                  <th style="padding:8px; text-align:right;">Qtd.</th>
+                  <th style="padding:8px;">Unid. ${orcGear('unidades', 'Gerenciar Unidades de Medida')}</th>
                   <th style="padding:8px; text-align:right;">Valor Unitário</th>
                   <th style="padding:8px; text-align:right;">Subtotal</th>
                   <th style="padding:8px; text-align:right;">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                ${linhasPedido || '<tr><td colspan="5" class="empty">Nenhum item adicionado ao pedido ainda. Use o formulário acima para começar.</td></tr>'}
+                ${linhasPedido || '<tr><td colspan="6" class="empty">Nenhum item adicionado ao pedido ainda. Use o formulário acima para começar.</td></tr>'}
               </tbody>
             </table>
           </div>
@@ -1335,12 +1398,25 @@ function viewOrc() {
 
     slide1 = `
       <div style="flex: 0 0 100%; min-width: 100%;">
+        ${datalistFornecedores}
         <div class="card" style="margin-bottom:14px;">
           <h2>Tipo e Dados da Cotação</h2>
           ${seletorModoHtml}
           <div class="fx" style="gap:10px; margin-top:12px;">
-            <input data-orc="titulo" placeholder="Título da Cotação (ex: Folhas A4, Pilhas, Canetas)" value="${esc(S.orc.titulo || '')}" style="flex:3 1 220px;">
-            <input data-orc="qtdTotal" placeholder="Quantidade Total de Itens" value="${esc(S.orc.qtdTotal || '')}" style="flex:1 1 120px;" title="Usada para calcular o valor por unidade">
+            <input data-orc="titulo" placeholder="Título da Cotação (ex: Folhas A4, Pilhas, Canetas)" value="${esc(S.orc.titulo || '')}" style="flex:2.5 1 200px;">
+            <div class="preset-field-wrap" style="flex:1.5 1 180px;">
+              <select data-orc="categoria" style="flex:1;" aria-label="Categoria ou Centro de Custo" title="Categoria / Centro de Custo">
+                ${optPreset(catOrcList, S.orc.categoria || '', 'Categoria / Centro de Custo...', true)}
+              </select>
+              ${orcGear('categorias', 'Gerenciar Categorias / Centros de Custo')}
+            </div>
+            <input data-orc="qtdTotal" placeholder="Qtd. Total" value="${esc(S.orc.qtdTotal || '')}" style="flex:1 1 105px;" title="Usada para calcular o valor por unidade">
+            <div class="preset-field-wrap" style="flex:1 1 115px;">
+              <select data-orc="unidade" style="flex:1;" aria-label="Unidade de medida" title="Unidade de Medida">
+                ${optPreset(unOrcList, S.orc.unidade || '', 'Unid...', true)}
+              </select>
+              ${orcGear('unidades', 'Gerenciar Unidades de Medida')}
+            </div>
             <input data-orc="data" type="date" value="${S.orc.data || hoje}" style="flex:1 1 130px;">
           </div>
         </div>
@@ -1348,7 +1424,18 @@ function viewOrc() {
         <div class="card" style="margin-bottom:14px;">
           <h2>Novo Fornecedor</h2>
           <form data-form="orcitem" id="formNovoFornecedor">
-            <input name="forn" placeholder="Nome do Fornecedor / Loja" required style="flex:2 1 160px;">
+            <div class="preset-field-wrap" style="flex:1.4 1 175px;">
+              <select id="orcComparativoFavSelect" style="flex:1;" title="Preencher fornecedor e link favoritos" aria-label="Fornecedor Favorito">
+                <option value="">⚡ Favorito...</option>
+                ${favFornecedores.map((f, idx) => {
+                  const nomeF = typeof f === 'string' ? f : (f && f.nome ? f.nome : '');
+                  const linkF = (f && typeof f === 'object' && f.link) ? f.link : '';
+                  return `<option value="${idx}">${esc(nomeF)}${linkF ? ' 🔗' : ''}</option>`;
+                }).join('')}
+              </select>
+              ${orcGear('fornecedores', 'Gerenciar Fornecedores Favoritos')}
+            </div>
+            <input name="forn" id="cad_fornNome" list="listaFornecedoresFavoritos" placeholder="Nome do Fornecedor / Loja" required style="flex:2 1 160px;">
             <input name="precoSemFrete" id="cad_precoSemFrete" placeholder="Preço (sem frete)" required style="flex:1 1 120px;">
             <input name="frete" placeholder="Frete (R$)" style="flex:1 1 90px;">
             <input name="valorUnd" id="cad_valorUnd" placeholder="Valor Und." style="flex:1 1 90px;" title="Calculado automaticamente se preenchida a quantidade total">
@@ -1416,7 +1503,7 @@ function viewOrc() {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:13px;">
               <div>
                 <b>${esc(i.nome || 'Item')}</b>
-                <span class="mu" style="font-size:11.5px; margin-left:6px;">(${orcItemQtd(i)}x ${brl(num(i.valorUnd))})</span>
+                <span class="mu" style="font-size:11.5px; margin-left:6px;">(${orcItemQtd(i)} ${esc(i.un || 'un')} x ${brl(num(i.valorUnd))})</span>
               </div>
               <div style="display:flex; align-items:center; gap:8px;">
                 <span class="pill b" style="font-size:10px;">${pesoPct}% do pedido</span>
@@ -1544,8 +1631,9 @@ function viewOrc() {
           ${hItens.map(it => {
             if (ehPedHist) {
               const q = orcItemQtd(it);
+              const un = (it.un || 'un').trim();
               const vu = num(it.valorUnd);
-              return `<li><span>${esc(it.nome || 'Item')} <span class="mu">(${q}x ${brl(vu)})</span></span><b>${brl(q * vu)}</b></li>`;
+              return `<li><span>${esc(it.nome || 'Item')} <span class="mu">(${q} ${esc(un)} x ${brl(vu)})</span></span><b>${brl(q * vu)}</b></li>`;
             }
             const tot = itemTotal(it);
             const ehMin = totalRef > 0 && Math.abs(tot - totalRef) < 0.005;
@@ -1561,6 +1649,7 @@ function viewOrc() {
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <b>${esc(h.titulo || (ehPedHist ? (h.fornecedor || 'Pedido Único') : 'Cotação'))} — ${br(h.data)}</b>
               ${tagModo}
+              ${h.categoria ? `<span class="pill b" style="font-size:10px; padding:1px 7px;">🏷️ ${esc(h.categoria)}</span>` : ''}
               ${badgeModoAtivo}
             </div>
             <span class="mu" style="font-size:12px;">
