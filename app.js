@@ -1,6 +1,6 @@
 /* ========================================================
    APP.JS - ORQUESTRADOR CENTRAL, CONFIGURAÇÕES E EVENTOS
-   Painel Operacional Prius
+   ARGOS OPS
 ======================================================== */
 
 // --- BACKUP E RESTAURAÇÃO ---
@@ -18,7 +18,7 @@ async function salvarArquivo(nome, dados, tipo) {
   return true;
 }
 
-function baixarBackup(prefixo = 'backup-painel') {
+function baixarBackup(prefixo = 'argos-ops-backup') {
   const agora = new Date(), carimbo = `${iso(agora)}_${pad(agora.getHours())}h${pad(agora.getMinutes())}`;
   S.meta.ultimoBackup = agora.toISOString(); 
   save();
@@ -31,7 +31,7 @@ function processarRestauracao(arquivo) {
   leitor.onload = function(e) {
     try {
       const dados = JSON.parse(e.target.result);
-      if (!dados || typeof dados !== 'object' || (!dados.aulas && !dados.reparos)) return alert('Backup inválido.');
+      if (!dados || typeof dados !== 'object' || Array.isArray(dados) || (!dados.aulas && !dados.reparos)) return alert('Backup inválido.');
       if (!confirm('ATENÇÃO: Deseja restaurar este backup?\nUma cópia de segurança automática será guardada antes de prosseguir.')) return;
       localStorage.setItem(KEY + '-snapshot-emergencia', JSON.stringify({ data: new Date().toISOString(), dados: S }));
       S = normalizarEstado(dados);
@@ -82,7 +82,7 @@ function renderSettingsGeralHtml() {
           </div>
           <div class="theme-card-info">
             <div class="theme-card-title">
-              <span>🌙 Modo Escuro</span>
+              <span><span class="ui-glyph" aria-hidden="true">☾</span> Modo Escuro</span>
               ${!isLight ? '<span class="pill o" style="font-size:10.5px; padding:1px 7px;">✓ Ativo</span>' : ''}
             </div>
             <span class="mu" style="font-size:11.5px;">Tema Notion Midnight com acentos Âmbar</span>
@@ -99,7 +99,7 @@ function renderSettingsGeralHtml() {
           </div>
           <div class="theme-card-info">
             <div class="theme-card-title">
-              <span>☀️ Modo Claro</span>
+              <span><span class="ui-glyph" aria-hidden="true">☀\uFE0E</span> Modo Claro</span>
               ${isLight ? '<span class="pill o" style="font-size:10.5px; padding:1px 7px;">✓ Ativo</span>' : ''}
             </div>
             <span class="mu" style="font-size:11.5px;">Alto contraste para ambientes iluminados</span>
@@ -108,9 +108,10 @@ function renderSettingsGeralHtml() {
       </div>
 
       <div style="margin-top: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-        <span class="mu" style="font-size: 12.5px;">Tema atual: <b style="color:var(--tx);">${isLight ? '☀️ Modo Claro (Alto Contraste)' : '🌙 Modo Escuro (Midnight & Amber)'}</b></span>
+        <span class="mu" style="font-size: 12.5px;">Tema atual: <b style="color:var(--tx);">${isLight ? '☀\uFE0E Modo Claro (Alto Contraste)' : '☾ Modo Escuro (Midnight & Amber)'}</b></span>
         <button class="b p" data-act="toggle_tema" style="display:inline-flex; align-items:center; gap:6px;">
-          <span>${isLight ? '🌙 Alternar para Modo Escuro' : '☀️ Alternar para Modo Claro'}</span>
+          <span class="ui-glyph" aria-hidden="true">${isLight ? '☾' : '☀\uFE0E'}</span>
+          <span>${isLight ? 'Alternar para Modo Escuro' : 'Alternar para Modo Claro'}</span>
         </button>
       </div>
     </div>
@@ -139,12 +140,12 @@ function renderSettingsGeralHtml() {
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <b>Status da Conexão:</b>
           <span class="pill ${isSupaAtivo ? 'o' : 'w'}" style="font-size:12px; padding:3px 10px;">
-            ${isSupaAtivo ? '☁️ Conectado ao Supabase' : '⚠️ Modo Offline'}
+            ${isSupaAtivo ? '<span class="ui-glyph" aria-hidden="true">☁\uFE0E</span> Conectado ao Supabase' : '<span class="ui-glyph" aria-hidden="true">⚠\uFE0E</span> Modo Offline'}
           </span>
           ${temPendLocal ? '<span class="pill b" style="font-size:11px; padding:2px 8px;">Alterações locais pendentes</span>' : ''}
         </div>
         <button class="b p" data-act="forcar_sync_nuvem" title="Forçar sincronização imediata com o banco na nuvem">
-          🔄 Sincronizar Agora
+          <span class="ui-glyph" aria-hidden="true">↻</span> Sincronizar Agora
         </button>
       </div>
 
@@ -167,13 +168,13 @@ function renderSettingsGeralHtml() {
 
     <div class="fx" style="gap:8px;">
       <button class="b" data-act="limpar_aulas_passadas" ${passadas === 0 ? 'disabled' : ''} title="Remove aulas com datas anteriores a hoje">
-        🧹 Limpar Aulas Passadas (${passadas})
+        <span class="ui-glyph" aria-hidden="true">✕</span> Limpar Aulas Passadas (${passadas})
       </button>
       <button class="b" data-act="limpar_reparos_concluidos" ${reparosConcluidos === 0 ? 'disabled' : ''} title="Remove chamados que já foram finalizados">
-        🧹 Limpar Manutenções Concluídas (${reparosConcluidos})
+        <span class="ui-glyph" aria-hidden="true">✕</span> Limpar Manutenções Concluídas (${reparosConcluidos})
       </button>
       <button class="b" data-act="limpar_orchist" ${orcHistQtd === 0 ? 'disabled' : ''} title="Remove histórico de orçamentos antigos">
-        🧹 Limpar Cotações Arquivadas (${orcHistQtd})
+        <span class="ui-glyph" aria-hidden="true">✕</span> Limpar Cotações Arquivadas (${orcHistQtd})
       </button>
     </div>
   `;
@@ -184,7 +185,7 @@ function renderSettingsGeralHtml() {
       <div class="stat"><b>Última restauração</b><span class="mu">${ultRest}</span></div>
     </div>
     <div class="fx" style="margin-bottom:14px;">
-      <button class="b p" data-act="bkp_download">📥 Exportar Cópia de Segurança (.json)</button>
+      <button class="b p" data-act="bkp_download"><span class="ui-glyph" aria-hidden="true">⇩</span> Exportar Cópia de Segurança (.json)</button>
     </div>
     <div class="mu" style="margin-bottom:6px;"><b>Restaurar de arquivo .json:</b></div>
     <input type="file" id="arquivoBackup" accept=".json,application/json">
@@ -193,9 +194,9 @@ function renderSettingsGeralHtml() {
     backupHtml += `<div style="margin-top:10px;"><button class="b" data-act="bkp_reverter">Desfazer última restauração (${snapTxt})</button></div>`;
   }
 
-  return card('🎨 Aparência & Tema do Painel', temaHtml) +
-         card('☁️ Status da Nuvem & Manutenção de Dados', nuvemHtml) + 
-         card('💾 Backup e Restauração de Dados', backupHtml);
+  return card('Aparência & Tema do Painel', temaHtml) +
+         card('<span class="ui-glyph" aria-hidden="true">☁\uFE0E</span> Status da Nuvem & Manutenção de Dados', nuvemHtml) + 
+         card('<span class="ui-glyph" aria-hidden="true">⇩</span> Backup e Restauração de Dados', backupHtml);
 }
 
 function viewConfig() {
@@ -247,6 +248,136 @@ function fecharModalConfig() {
   if (modal) modal.style.display = 'none';
 }
 
+// --- MENU RÁPIDO DE PLANILHAS DE APOIO (POPOVER NO CABEÇALHO) ---
+const MAX_SUPPORT_SHEETS = 10;
+
+function renderSheetsPopover() {
+  const btn = document.getElementById('btnOpenSheetsMenu');
+  const pop = document.getElementById('sheetsQuickPopover');
+  if (btn) {
+    btn.classList.toggle('active', !!sheetsMenuAberto);
+    btn.setAttribute('aria-expanded', sheetsMenuAberto ? 'true' : 'false');
+  }
+  if (!pop) return;
+
+  if (!sheetsMenuAberto) {
+    pop.style.display = 'none';
+    return;
+  }
+
+  const sheets = Array.isArray(S.supportSheets) ? S.supportSheets : [];
+  const atingiuLimite = sheets.length >= MAX_SUPPORT_SHEETS;
+  const editItem = sheetsFormModo === 'edit' ? sheets.find(x => x.id === sheetsEditId) : null;
+  if (sheetsFormModo === 'edit' && !editItem) {
+    sheetsFormModo = '';
+    sheetsEditId = '';
+  }
+
+  const formHtml = (sheetsFormModo === 'new' || sheetsFormModo === 'edit') ? `
+    <form id="formSupportSheet" data-form="support_sheet" class="sheets-inline-form">
+      <div class="sheets-inline-form-head">${sheetsFormModo === 'edit' ? 'Editar planilha' : 'Nova planilha de apoio'}</div>
+      <div class="sheets-inline-field">
+        <label for="inpSheetTask">Tarefa / Nome da Planilha *</label>
+        <input id="inpSheetTask" name="task" placeholder="Ex.: Controle de Frequência" value="${esc(editItem ? editItem.task : '')}" required autocomplete="off">
+      </div>
+      <div class="sheets-inline-field">
+        <label for="inpSheetUrl">Link da Planilha (URL) *</label>
+        <input id="inpSheetUrl" name="url" placeholder="https://docs.google.com/spreadsheets/..." value="${esc(editItem ? editItem.url : '')}" required autocomplete="off">
+      </div>
+      <div class="sheets-inline-actions">
+        <button type="submit" class="b p">Salvar</button>
+        <button type="button" class="b" data-act="sheets_cancel_form">Cancelar</button>
+      </div>
+    </form>
+  ` : '';
+
+  const listHtml = sheets.map(s => {
+    const safeUrl = typeof safeHttpUrl === 'function' ? safeHttpUrl(s.url) : s.url;
+    const isEditing = sheetsFormModo === 'edit' && sheetsEditId === s.id;
+    return `
+      <div class="sheets-item ${isEditing ? 'is-editing' : ''}">
+        <a class="sheets-item-link" href="${esc(safeUrl || '#')}" ${safeUrl ? 'target="_blank" rel="noopener noreferrer"' : 'data-act="sheets_invalid_link"'} title="${esc(s.url)}">
+          <span class="sheets-item-task">${esc(s.task)}</span>
+          <span class="sheets-item-ext" aria-hidden="true">↗</span>
+        </a>
+        <div class="sheets-item-actions">
+          <button type="button" class="sheets-icon-btn" data-act="sheets_edit" data-id="${esc(s.id)}" title="Editar planilha" aria-label="Editar ${esc(s.task)}"><span class="ui-glyph" aria-hidden="true">✎</span></button>
+          <button type="button" class="sheets-icon-btn is-del" data-act="sheets_del" data-id="${esc(s.id)}" title="Excluir planilha" aria-label="Excluir ${esc(s.task)}"><span class="ui-glyph" aria-hidden="true">✕</span></button>
+        </div>
+      </div>
+    `;
+  }).join('') || '<div class="empty sheets-empty">Nenhuma planilha salva.<br>Clique em <b>+ Nova</b> para adicionar.</div>';
+
+  pop.innerHTML = `
+    <div class="sheets-popover-header">
+      <div class="sheets-popover-title-wrap">
+        <b class="sheets-popover-title">Planilhas de Apoio</b>
+        <span class="sheets-popover-count" title="Slots ocupados">${sheets.length}/${MAX_SUPPORT_SHEETS}</span>
+      </div>
+      <button type="button" class="b p sheets-btn-new" data-act="sheets_open_new" ${atingiuLimite ? 'disabled title="Limite máximo de 10 planilhas atingido"' : 'title="Adicionar nova planilha"'}>+ Nova</button>
+    </div>
+    ${formHtml}
+    <div class="sheets-list">${listHtml}</div>
+  `;
+  pop.style.display = 'block';
+}
+
+// --- POPOVER DE FILTROS EMBUTIDO NA BUSCA GLOBAL ---
+const SEARCH_FILTER_OPTIONS = [
+  { value: 'todos', label: 'Todos os tipos', desc: 'Visão geral e todas as categorias' },
+  { value: 'aulas', label: 'Aulas', desc: 'Quadro, cronogramas e materiais' },
+  { value: 'operacional', label: 'Operacional', desc: 'Recibos, reparos e resumos' },
+  { value: 'orc', label: 'Orçamento', desc: 'Cotações, fornecedores e histórico' }
+];
+
+function renderSearchFilterPopover() {
+  const wrap = document.getElementById('globalSearchWrapper');
+  const btn = document.getElementById('btnToggleSearchFilter');
+  const dot = document.getElementById('searchFilterDot');
+  const pop = document.getElementById('searchFilterPopover');
+  const hasFilter = (buscaGlobalTipo && buscaGlobalTipo !== 'todos') || !!buscaGlobalExpandida;
+
+  if (wrap) {
+    wrap.classList.toggle('has-clear', !!(buscaGlobalTermo && buscaGlobalTermo.trim()));
+  }
+  if (btn) {
+    btn.classList.toggle('is-active', !!hasFilter);
+    btn.classList.toggle('is-open', !!searchFilterAberto);
+    btn.setAttribute('aria-expanded', searchFilterAberto ? 'true' : 'false');
+  }
+  if (dot) {
+    dot.style.display = hasFilter ? 'block' : 'none';
+  }
+  if (!pop) return;
+
+  if (!searchFilterAberto) {
+    pop.style.display = 'none';
+    return;
+  }
+
+  const optsHtml = SEARCH_FILTER_OPTIONS.map(opt => {
+    const active = (buscaGlobalTipo || 'todos') === opt.value;
+    return `
+      <button type="button" class="search-filter-option ${active ? 'active' : ''}" data-act="search_filter_select" data-tipo="${esc(opt.value)}">
+        <span class="search-filter-option-main">
+          <span class="search-filter-option-label">${esc(opt.label)}</span>
+          <span class="search-filter-option-desc">${esc(opt.desc)}</span>
+        </span>
+        <span class="search-filter-option-check" aria-hidden="true">${active ? '✓' : ''}</span>
+      </button>
+    `;
+  }).join('');
+
+  pop.innerHTML = `
+    <div class="search-filter-popover-header">
+      <b class="search-filter-popover-title">Filtrar por categoria</b>
+      <button type="button" class="search-filter-clear-btn" data-act="limpar_filtros_busca" ${!hasFilter ? 'disabled' : ''}>Limpar filtros</button>
+    </div>
+    <div class="search-filter-options-list">${optsHtml}</div>
+  `;
+  pop.style.display = 'block';
+}
+
 // --- GAVETA LATERAL DE LEMBRETES (DRAWER) ---
 function renderDrawer() {
   const lembretes = S.lembretes || [];
@@ -256,14 +387,40 @@ function renderDrawer() {
   const pct = total === 0 ? 0 : Math.round((concluidos / total) * 100);
   const badgeHtml = pendentes > 0 ? `<span class="drawer-badge">${pendentes}</span>` : '';
 
+  const tagsList = typeof getPresetList === 'function' ? getPresetList('notas', 'etiquetas') : [];
+  if (typeof notaTagSelecionada === 'string' && notaTagSelecionada && !tagsList.some(t => norm(t) === norm(notaTagSelecionada))) {
+    notaTagSelecionada = '';
+  }
+
+  const tagsChipsHtml = tagsList.map(tag => {
+    const ativa = typeof notaTagSelecionada === 'string' && norm(notaTagSelecionada) === norm(tag);
+    return `
+      <span class="drawer-tag-chip ${ativa ? 'active' : ''}">
+        <button type="button" class="drawer-tag-sel" data-act="nota_sel_tag" data-tag="${esc(tag)}" title="${ativa ? 'Remover seleção desta tag' : 'Aplicar tag na próxima nota'}">${esc(tag)}</button>
+        <button type="button" class="drawer-tag-del" data-act="nota_del_tag" data-tag="${esc(tag)}" title="Excluir tag">×</button>
+      </span>
+    `;
+  }).join('');
+
+  const novaTagFormHtml = (typeof novaTagNotaAberta !== 'undefined' && novaTagNotaAberta) ? `
+    <form data-form="nova_tag_nota" class="drawer-new-tag-form">
+      <input id="inpNovaTagNota" name="tag" placeholder="Nome da nova tag..." autocomplete="off" required>
+      <button type="submit" class="b p" style="padding:5px 10px; font-size:12px;">Adicionar</button>
+      <button type="button" class="b" data-act="toggle_nova_tag_nota" style="padding:5px 8px; font-size:12px;" title="Cancelar">✕</button>
+    </form>
+  ` : '';
+
   let itensHtml = lembretes.map(l => `
     <div class="drawer-item ${l.feito ? 'done' : ''}">
-      <input type="checkbox" data-act="tog_lembrete" data-id="${l.id}" ${l.feito ? 'checked' : ''} title="Marcar como feito">
+      <input type="checkbox" data-act="tog_lembrete" data-id="${esc(l.id)}" ${l.feito ? 'checked' : ''} title="Marcar como feito">
       <div class="drawer-item-text">
         <span class="txt">${esc(l.texto)}</span>
-        <span class="time">${esc(l.hora || '')}${l.data ? ' • ' + esc(l.data) : ''}</span>
+        <span class="time">
+          ${l.tag ? `<span class="drawer-item-tag">${esc(l.tag)}</span>` : ''}
+          ${esc(l.hora || '')}${l.data ? ' • ' + esc(l.data) : ''}
+        </span>
       </div>
-      <button class="x" data-act="del_lembrete" data-id="${l.id}" title="Excluir lembrete" style="padding: 2px 6px;">✕</button>
+      <button class="x" data-act="del_lembrete" data-id="${esc(l.id)}" title="Excluir lembrete" style="padding: 2px 6px;">✕</button>
     </div>
   `).join('') || '<div class="empty" style="padding: 28px 0;">Sem lembretes no momento.<br><span class="mu" style="font-size:12px;">Digite um recado rápido acima!</span></div>';
 
@@ -271,7 +428,7 @@ function renderDrawer() {
     <div class="drawer-progresso-card">
       <div class="drawer-progresso-topo">
         <div style="display:flex; align-items:center; gap:7px;">
-          <span style="font-size:14px;">📊</span>
+          <span class="ui-glyph" style="font-size:14px;" aria-hidden="true">▤</span>
           <b class="drawer-progresso-titulo">Progresso de Lembretes</b>
         </div>
         <span class="drawer-progresso-pct ${pct === 100 ? 'done' : (pct > 0 ? 'progress' : '')}">
@@ -290,7 +447,7 @@ function renderDrawer() {
         ${total === 0 
           ? '<span class="mu">Sem notas</span>' 
           : (pct === 100 
-              ? '<span class="drawer-progresso-ok">Tudo concluído! 🎉</span>' 
+              ? '<span class="drawer-progresso-ok">Tudo concluído! ✓</span>' 
               : `<span class="drawer-progresso-pend">${pendentes} pendente${pendentes === 1 ? '' : 's'}</span>`
             )
         }
@@ -300,7 +457,7 @@ function renderDrawer() {
 
   return `
     <button id="btnToggleDrawer" class="drawer-fab" data-act="toggle_drawer" title="Abrir Lembretes Rápidos (Alt + N)">
-      <span style="font-size:16px;">📝</span>
+      <span class="ui-glyph" style="font-size:16px;" aria-hidden="true">✎</span>
       <span class="fab-lbl">Notas</span>
       ${badgeHtml}
     </button>
@@ -310,20 +467,24 @@ function renderDrawer() {
     <aside id="drawerLembretes" class="drawer-panel ${drawerAberto ? 'open' : ''}">
       <div class="drawer-header">
         <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:18px;">📝</span>
+          <span class="ui-glyph" style="font-size:18px; color:var(--ac);" aria-hidden="true">✎</span>
           <b style="font-size:15px; color:var(--ac);">Lembretes Rápidos</b>
         </div>
         <div style="display:flex; align-items:center; gap:6px;">
-          ${typeof presetGearBtn === 'function' ? presetGearBtn('notas', 'etiquetas') : ''}
           <button class="x" data-act="toggle_drawer" title="Fechar (Esc)" style="font-size:16px;">✕</button>
         </div>
       </div>
 
       <form data-form="novo_lembrete" class="drawer-form">
         <input name="texto" id="inpNovoLembrete" placeholder="Lembrar de..." required autocomplete="off">
-        <button class="b p" style="padding: 8px 14px; font-weight:bold;">＋</button>
+        <button class="b p" style="padding: 8px 14px; font-weight:bold;">+</button>
       </form>
-      <div class="mu" style="font-size:11.5px; margin: -2px 0 10px 2px;">Pressione Enter para adicionar rapidamente</div>
+      <div class="drawer-tags-bar">
+        ${tagsChipsHtml}
+        <button type="button" class="drawer-tag-add-btn ${(typeof novaTagNotaAberta !== 'undefined' && novaTagNotaAberta) ? 'active' : ''}" data-act="toggle_nova_tag_nota" title="Criar nova tag diretamente na gaveta">+ Nova Tag</button>
+      </div>
+      ${novaTagFormHtml}
+      <div class="mu" style="font-size:11.5px; margin: 0 0 10px 2px;">${notaTagSelecionada ? `Etiqueta ativa: <b style="color:var(--ac);">${esc(notaTagSelecionada)}</b> • ` : ''}Pressione Enter para adicionar rapidamente</div>
 
       ${barraProgressoHtml}
 
@@ -334,7 +495,7 @@ function renderDrawer() {
       ${lembretes.some(l => l.feito) ? `
         <div class="drawer-footer">
           <button class="b" data-act="limpar_lembretes_concluidos" style="font-size:12px; width:100%;">
-            🧹 Limpar lembretes concluídos
+            <span class="ui-glyph" aria-hidden="true">✕</span> Limpar lembretes concluídos
           </button>
         </div>
       ` : ''}
@@ -342,87 +503,146 @@ function renderDrawer() {
   `;
 }
 
-// --- ROTEADOR PRINCIPAL DE TELAS ---
-function views() {
-  if (buscaGlobalTermo.trim()) {
-    const termos = norm(buscaGlobalTermo).split(/\s+/).filter(Boolean);
-    const matchCorpus = texto => termos.every(t => texto.includes(t));
+function coletarResultadosBuscaGlobal(termos) {
+  const resAulas = S.aulas.filter(a => {
+    const diaBr = typeof br === 'function' ? br(a.dia) : a.dia;
+    const diaBrAno = a.dia ? a.dia.split('-').reverse().join('/') : '';
+    const diaSem = typeof wd === 'function' ? wd(a.dia) : '';
+    const corpus = `${a.prof || ''} ${a.turma || ''} ${a.desc || ''} ${a.turno || ''} ${a.formaEnvio || ''} ${a.dia || ''} ${diaBr} ${diaBrAno} ${diaSem} ${a.hora || ''}`;
+    return matchBusca(corpus, termos);
+  });
 
-    const resAulas = S.aulas.filter(a => {
-      const diaBr = typeof br === 'function' ? br(a.dia) : a.dia;
-      const diaBrAno = a.dia ? a.dia.split('-').reverse().join('/') : '';
-      const diaSem = typeof wd === 'function' ? wd(a.dia) : '';
-      const corpus = `${norm(a.prof)} ${norm(a.turma)} ${norm(a.desc)} ${a.dia} ${diaBr} ${diaBrAno} ${diaSem} ${norm(a.hora)}`;
-      return matchCorpus(corpus);
-    });
+  const resReparos = S.reparos.filter(r => {
+    const diaReg = typeof br === 'function' ? br(r.dataReg) : r.dataReg;
+    const corpus = `${r.item || ''} ${r.local || ''} ${r.resp || ''} ${r.obs || ''} ${r.status || ''} ${diaReg}`;
+    return matchBusca(corpus, termos);
+  });
 
-    const resReparos = S.reparos.filter(r => {
-      const diaReg = typeof br === 'function' ? br(r.dataReg) : r.dataReg;
-      const corpus = `${norm(r.item)} ${norm(r.local)} ${norm(r.resp)} ${norm(r.obs)} ${norm(r.status)} ${diaReg}`;
-      return matchCorpus(corpus);
-    });
+  const resDocs = (typeof groups === 'function' ? groups('0000-00-00', '9999-99-99') : []).filter(g => {
+    const aulasStr = (g.aulas || []).map(a => `${a.turma || ''} ${a.desc || ''} ${a.hora || ''}`).join(' ');
+    return matchBusca(`${g.prof || ''} ${br(g.dia)} ${wd(g.dia)} ${aulasStr}`, termos);
+  });
 
-    const resOrc = (S.orc.itens || []).filter(i => {
-      const corpus = `${norm(i.forn || i.nome)} ${norm(i.obs)} ${norm(i.link)} ${norm(S.orc.titulo)} ${norm(i.status)}`;
-      return matchCorpus(corpus);
-    });
-    
-    const totalResultados = resAulas.length + resReparos.length + resOrc.length;
+  const resOrc = (S.orc.itens || []).filter(i => {
+    const corpus = `${i.forn || ''} ${i.nome || ''} ${i.obs || ''} ${i.link || ''} ${S.orc.titulo || ''} ${S.orc.fornecedor || ''} ${S.orc.categoria || ''} ${i.status || ''}`;
+    return matchBusca(corpus, termos);
+  });
 
-    let filtroCategoriasHtml = `
-      <div class="search-category-filter-bar">
-        <button class="b ${buscaGlobalTipo === 'todos' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="todos">
-          Todos (${totalResultados})
-        </button>
-        <button class="b ${buscaGlobalTipo === 'aulas' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="aulas">
-          📚 Aulas (${resAulas.length})
-        </button>
-        <button class="b ${buscaGlobalTipo === 'operacional' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="operacional">
-          🛠️ Operacional (${resReparos.length})
-        </button>
-        <button class="b ${buscaGlobalTipo === 'orc' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="orc">
-          💰 Orçamento (${resOrc.length})
-        </button>
-        <button class="b" data-act="limparBuscaGlobal" style="margin-left:auto;">
-          ✕ Limpar busca
-        </button>
-      </div>
-    `;
+  const resOrcHist = (S.orcHist || []).filter(h => {
+    const itensStr = (h.itens || []).map(x => `${x.forn || ''} ${x.nome || ''} ${x.obs || ''}`).join(' ');
+    return matchBusca(`${h.titulo || ''} ${h.fornecedor || ''} ${h.categoria || ''} ${h.obs || ''} ${h.data || ''} ${itensStr}`, termos);
+  });
 
-    let html = filtroCategoriasHtml;
+  return { resAulas, resReparos, resDocs, resOrc, resOrcHist };
+}
 
-    if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'aulas') {
-      html += `<h3>📚 Aulas encontradas (${resAulas.length})</h3>${resAulas.map(typeof aulaRow === 'function' ? aulaRow : (a => `<div class="row"><div class="t"><b>${esc(a.prof)} — ${esc(a.turma)}</b></div></div>`)).join('') || '<div class="empty">Nenhuma aula encontrada para este filtro.</div>'}`;
-    }
+function renderResultadosBuscaGeral(termos, dados) {
+  const { resAulas, resReparos, resDocs, resOrc, resOrcHist } = dados || coletarResultadosBuscaGlobal(termos);
+  const totalOp = resReparos.length + resDocs.length;
+  const totalOrc = resOrc.length + resOrcHist.length;
+  const totalResultados = resAulas.length + totalOp + totalOrc;
 
-    if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'operacional') {
-      html += `<h3>🛠️ Manutenções e Reparos (${resReparos.length})</h3>${resReparos.map(r => `<div class="row"><div class="t"><b>${esc(r.local ? `[${r.local}] ` : '')}${esc(r.item)}</b><span class="mu">${esc(r.status)}</span></div></div>`).join('') || '<div class="empty">Nenhum chamado correspondente para este filtro.</div>'}`;
-    }
+  let filtroCategoriasHtml = `
+    <div class="search-category-filter-bar">
+      <button class="b ${buscaGlobalTipo === 'todos' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="todos">
+        Todos (${totalResultados})
+      </button>
+      <button class="b ${buscaGlobalTipo === 'aulas' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="aulas">
+        Aulas (${resAulas.length})
+      </button>
+      <button class="b ${buscaGlobalTipo === 'operacional' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="operacional">
+        Operacional (${totalOp})
+      </button>
+      <button class="b ${buscaGlobalTipo === 'orc' ? 'p' : ''}" data-act="set_filtro_busca" data-tipo="orc">
+        Orçamento (${totalOrc})
+      </button>
+      <button class="b" data-act="limparBuscaGlobal" style="margin-left:auto;">
+        ✕ Limpar busca
+      </button>
+    </div>
+  `;
 
-    if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'orc') {
-      html += `<h3>💰 Cotações e Fornecedores (${resOrc.length})</h3>${resOrc.map(i => `<div class="row"><div class="t"><b>${esc(i.forn || i.nome)} — ${brl(itemTotal(i))}</b><span class="mu">${esc(S.orc.titulo || '')} • Status: ${i.status}</span></div></div>`).join('') || '<div class="empty">Nenhuma cotação encontrada para este filtro.</div>'}`;
-    }
+  let html = filtroCategoriasHtml;
 
-    const rotuloTipo = buscaGlobalTipo === 'aulas' ? 'Aulas' : (buscaGlobalTipo === 'operacional' ? 'Operacional' : (buscaGlobalTipo === 'orc' ? 'Orçamento' : 'Todas as Categorias'));
-    return card(`Resultados da busca: "${esc(buscaGlobalTermo)}" [${rotuloTipo}]`, html);
+  if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'aulas') {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+      <h3 style="margin:0;">Aulas encontradas (${resAulas.length})</h3>
+      <button class="b" data-act="ir_aba_busca" data-tab="aulas" data-sub="quadro" style="font-size:11.5px; padding:3px 9px;">Abrir em Aulas &rarr;</button>
+    </div>${resAulas.map(typeof aulaRow === 'function' ? aulaRow : (a => `<div class="row"><div class="t"><b>${esc(a.prof)} — ${esc(a.turma)}</b><span class="mu">${wd(a.dia)} ${br(a.dia)}${a.hora ? ' • ' + esc(a.hora) : ''}${a.desc ? ' — ' + esc(a.desc) : ''}</span></div></div>`)).join('') || '<div class="empty">Nenhuma aula encontrada para este filtro.</div>'}`;
   }
 
+  if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'operacional') {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:12px;">
+      <h3 style="margin:0;">Manutenções e Reparos (${resReparos.length})</h3>
+      <button class="b" data-act="ir_aba_busca" data-tab="semana" data-sub="reparos" style="font-size:11.5px; padding:3px 9px;">Abrir em Operacional &rarr;</button>
+    </div>${resReparos.map(r => `<div class="row"><div class="t"><b>${esc(r.local ? `[${r.local}] ` : '')}${esc(r.item)}</b><span class="mu">${esc(r.status)}${r.resp ? ' • ' + esc(r.resp) : ''}</span></div></div>`).join('') || '<div class="empty">Nenhum chamado correspondente para este filtro.</div>'}`;
+
+    if (resDocs.length) {
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:12px;">
+        <h3 style="margin:0;">Recibos Docentes (${resDocs.length})</h3>
+        <button class="b" data-act="ir_aba_busca" data-tab="semana" data-sub="docs" style="font-size:11.5px; padding:3px 9px;">Abrir Recibos &rarr;</button>
+      </div>${resDocs.slice(0, 12).map(g => `<div class="row"><div class="t"><b>${esc(g.prof)} — ${wd(g.dia)} ${br(g.dia)}</b><span class="mu">${(g.aulas || []).map(a => esc(a.turma)).join(' + ')}</span></div></div>`).join('')}`;
+    }
+  }
+
+  if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'orc') {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:12px;">
+      <h3 style="margin:0;">Cotações Atuais e Arquivadas (${totalOrc})</h3>
+      <button class="b" data-act="ir_aba_busca" data-tab="orc" style="font-size:11.5px; padding:3px 9px;">Abrir em Orçamento &rarr;</button>
+    </div>${resOrc.map(i => `<div class="row"><div class="t"><b>${esc(i.forn || i.nome)} — ${brl(itemTotal(i))}</b><span class="mu">${esc(S.orc.titulo || S.orc.fornecedor || '')} • Status: ${esc(i.status)}</span></div></div>`).join('')}${resOrcHist.map(h => `<div class="row"><div class="t"><b>▪ ${esc(h.titulo || h.fornecedor || 'Arquivado')} (${br(h.data)})</b><span class="mu">${(h.itens || []).length} registro(s)${h.categoria ? ' • ' + esc(h.categoria) : ''}</span></div></div>`).join('')}${totalOrc === 0 ? '<div class="empty">Nenhuma cotação encontrada para este filtro.</div>' : ''}`;
+  }
+
+  const rotuloTipo = buscaGlobalTipo === 'aulas' ? 'Aulas' : (buscaGlobalTipo === 'operacional' ? 'Operacional' : (buscaGlobalTipo === 'orc' ? 'Orçamento' : 'Todas as Categorias'));
+  return card(`Resultados gerais no painel: "${esc(buscaGlobalTermo)}" [${rotuloTipo}]`, html);
+}
+
+// --- ROTEADOR PRINCIPAL DE TELAS ---
+function renderTabAtiva() {
   if (tab === 'hoje') {
     if (typeof viewHoje === 'function') return viewHoje();
-    
+
     // Fallback nativo caso o ficheiro hoje.js não tenha sido carregado
+    const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
+    const formasEnvioList = typeof getPresetList === 'function'
+      ? getPresetList('operacao', 'formasEnvio')
+      : ['WhatsApp', 'E-mail', 'Drive', 'Impresso', 'Servidor / Rede'];
+    const optEnvioHtml = (sel = '') => typeof renderPresetSelectOptions === 'function'
+      ? renderPresetSelectOptions(formasEnvioList, sel, 'Forma de envio...', true)
+      : `<option value="">Forma de envio...</option>` + formasEnvioList.map(v => `<option value="${esc(v)}" ${norm(v) === norm(sel) ? 'selected' : ''}>${esc(v)}</option>`).join('');
+    const btnAddEnvio = typeof presetGearBtn === 'function'
+      ? presetGearBtn('operacao', 'formasEnvio', '+', 'Gerenciar Formas de Envio de Material')
+      : '';
+
     const aulasConf = S.aulas.filter(a => {
       if (a.dia < hoje) return false;
       const cDia = dataConfirmacaoAula(a.dia);
-      return cDia === hoje || (cDia < hoje && !a.confirmada);
+      if (!(cDia === hoje || (cDia < hoje && !a.confirmada))) return false;
+      if (!termosBusca.length) return true;
+      return matchBusca(`${a.prof} ${a.turma} ${a.desc} ${a.turno} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca);
     });
     aulasConf.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
     const confPendentes = aulasConf.filter(a => !a.confirmada);
     const G = typeof groups === 'function' ? groups(mon(0), addD(mon(0), 6)) : [];
-    const pendDocs = typeof docDone === 'function' ? G.filter(g => !docDone(g)) : [];
-    const repPend = S.reparos.filter(r => r.status !== 'Concluído');
-    const orcAguardando = (S.orc.itens || []).filter(i => i.status === 'Aguardando aprovação');
-    const orcProblema = (S.orc.itens || []).filter(i => i.status === 'Com problema');
+    const pendDocs = (typeof docDone === 'function' ? G.filter(g => !docDone(g)) : []).filter(g => {
+      if (!termosBusca.length) return true;
+      const aulasCorpus = g.aulas.map(a => `${a.turma} ${a.hora} ${a.desc}`).join(' ');
+      return matchBusca(`${g.prof} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBusca);
+    });
+    const repPend = S.reparos.filter(r => {
+      if (r.status === 'Concluído') return false;
+      if (!termosBusca.length) return true;
+      return matchBusca(`${r.local} ${r.item} ${r.obs} ${r.resp} ${r.status}`, termosBusca);
+    });
+    const orcAguardando = (S.orc.itens || []).filter(i => {
+      if (i.status !== 'Aguardando aprovação') return false;
+      if (!termosBusca.length) return true;
+      return matchBusca(`${i.forn} ${i.nome} ${i.obs} ${S.orc.titulo} ${i.status}`, termosBusca);
+    });
+    const orcProblema = (S.orc.itens || []).filter(i => {
+      if (i.status !== 'Com problema') return false;
+      if (!termosBusca.length) return true;
+      return matchBusca(`${i.forn} ${i.nome} ${i.obs} ${S.orc.titulo} ${i.status}`, termosBusca);
+    });
     const pendentesGeral = S.aulas.filter(a => a.dia >= hoje && !a.materialPronto);
 
     let proximaDataEntrega = null;
@@ -439,24 +659,34 @@ function views() {
       matsEnvio = S.aulas.filter(a => a.dia >= hoje && a.materialConcluidoEm === hoje);
     }
 
+    if (termosBusca.length) {
+      matsEnvio = matsEnvio.filter(a => matchBusca(`${a.turma} ${a.desc} ${a.prof} ${a.formaEnvio} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca));
+    }
+
     matsEnvio.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
     const matsEnvioPendentes = matsEnvio.filter(a => !a.materialPronto);
     const alertaVolume = matsEnvioPendentes.length >= 4;
 
     const matRowHoje = a => `
       <div class="row ${a.materialPronto ? 'done' : ''}" style="align-items: center; padding: 6px 8px;">
-        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''} title="Marcar material como enviado">
+        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''} title="Marcar material como enviado">
         <div class="t">
           <b>${esc(a.turma)}${a.desc ? ' — ' + esc(a.desc) : ''}</b>
           <span class="mu">Aula: <b>${wd(a.dia)} ${br(a.dia)}</b>${a.hora ? ' às ' + esc(a.hora) : ''} • Prof: ${esc(a.prof || 'A definir')}</span>
         </div>
-        <button class="b" data-act="ir_fila_material" data-turma="${esc(a.turma)}" style="font-size: 11.5px; padding: 3px 8px;" title="Adicionar à fila de envio">📦 Fila</button>
+        <div class="preset-field-wrap mat-envio-wrap">
+          <select class="obs mat-envio-select" data-act="ae_sel" data-id="${esc(a.id)}" data-f="formaEnvio" title="Forma de envio do material" aria-label="Forma de envio do material">
+            ${optEnvioHtml(a.formaEnvio || '')}
+          </select>
+          ${btnAddEnvio}
+        </div>
+        <button class="b" data-act="ir_fila_material" data-turma="${esc(a.turma)}" style="font-size: 11.5px; padding: 3px 8px;" title="Adicionar à fila de envio"><span class="ui-glyph" aria-hidden="true">▸</span> Fila</button>
       </div>
     `;
 
     const confRowHoje = a => `
       <div class="row ${a.confirmada ? 'done' : ''}" style="align-items: center; padding: 6px 8px;">
-        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} title="Confirmar aula">
+        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} title="Confirmar aula">
         <div class="t">
           <b>${esc(a.prof || 'Sem professor')} — ${esc(a.turma)}</b>
           <span class="mu">${wd(a.dia)} ${br(a.dia)}${a.hora ? ' às ' + esc(a.hora) : ''}${a.desc ? ' — ' + esc(a.desc) : ''}</span>
@@ -500,7 +730,7 @@ function views() {
         <div class="stat" data-act="goto_tab" data-tab="aulas" data-sub="import" style="cursor: pointer;" title="Ver cronogramas e materiais">
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <b>${matsEnvioPendentes.length}</b>
-            ${alertaVolume ? '<span class="pill w" style="font-size:10px; padding:1px 6px;">⚠️ 4+</span>' : ''}
+            ${alertaVolume ? '<span class="pill w" style="font-size:10px; padding:1px 6px;">⚠\uFE0E 4+</span>' : ''}
           </div>
           <span class="mu stat-link-label"><span>próximo envio de materiais</span>${typeof icoSeta === 'function' ? icoSeta('right', 13) : '&rarr;'}</span>
         </div>
@@ -523,12 +753,12 @@ function views() {
       </div>
     `;
 
-    let rotuloEnvio = '📦 Próximo Envio de Materiais';
+    let rotuloEnvio = 'Próximo Envio de Materiais';
     if (proximaDataEntrega) {
-      if (proximaDataEntrega < hoje) rotuloEnvio = '📦 Próximo Envio — Pendências Atrasadas';
-      else if (proximaDataEntrega === hoje) rotuloEnvio = '📦 Próximo Envio — Entrega Hoje';
-      else if (proximaDataEntrega === amanha) rotuloEnvio = `📦 Próximo Envio — Entrega Amanhã (${br(proximaDataEntrega)})`;
-      else rotuloEnvio = `📦 Próximo Envio — Entrega ${wd(proximaDataEntrega)} (${br(proximaDataEntrega)})`;
+      if (proximaDataEntrega < hoje) rotuloEnvio = 'Próximo Envio — Pendências Atrasadas';
+      else if (proximaDataEntrega === hoje) rotuloEnvio = 'Próximo Envio — Entrega Hoje';
+      else if (proximaDataEntrega === amanha) rotuloEnvio = `Próximo Envio — Entrega Amanhã (${br(proximaDataEntrega)})`;
+      else rotuloEnvio = `Próximo Envio — Entrega ${wd(proximaDataEntrega)} (${br(proximaDataEntrega)})`;
     }
 
     const linkTitulo = (texto, tabDest, subDest) => `
@@ -540,7 +770,7 @@ function views() {
 
     const bannerAlerta = alertaVolume
       ? `<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; margin-bottom:8px; background:var(--wr-light); border:1px solid rgba(245, 158, 11, 0.25); border-radius:8px; font-size:12px; color:var(--wr); font-weight:500;">
-           <span>⚠️</span> <span><b>Alerta de volume:</b> Há ${matsEnvioPendentes.length} materiais pendentes neste envio.</span>
+           <span class="ui-glyph" style="color:inherit;" aria-hidden="true">⚠\uFE0E</span> <span><b>Alerta de volume:</b> Há ${matsEnvioPendentes.length} materiais pendentes neste envio.</span>
          </div>`
       : '';
 
@@ -548,12 +778,12 @@ function views() {
       linkTitulo(rotuloEnvio, 'aulas', 'import'),
       matsEnvio.length
         ? `${bannerAlerta}<div style="max-height: 250px; overflow-y: auto;">${matsEnvio.map(matRowHoje).join('')}</div>`
-        : '<div class="empty">🎉 Todos os materiais futuros estão em dia!</div>',
+        : `<div class="empty">Todos os materiais futuros estão em dia!</div><div style="display:flex; justify-content:flex-end; align-items:center; gap:6px; margin-top:8px;"><span class="mu" style="font-size:11.5px;">Formas de envio:</span>${btnAddEnvio}</div>`,
       matsEnvioPendentes.length
     );
 
     let htmlConf = card(
-      linkTitulo('📅 Confirmações de Aula', 'aulas', 'quadro'),
+      linkTitulo('Confirmações de Aula', 'aulas', 'quadro'),
       aulasConf.length
         ? `<div style="max-height: 240px; overflow-y: auto;">${aulasConf.map(confRowHoje).join('')}</div>`
         : '<div class="empty">Nenhuma aula pendente de confirmação para hoje.</div>',
@@ -561,7 +791,7 @@ function views() {
     );
 
     let htmlReps = card(
-      linkTitulo('🛠️ Reparos e Manutenções Abertas', 'semana', 'reparos'),
+      linkTitulo('Reparos e Manutenções Abertas', 'semana', 'reparos'),
       repPend.length 
         ? `<div style="max-height: 180px; overflow-y: auto;">${repPend.map(reparoRowHoje).join('')}</div>`
         : '<div class="empty" style="padding: 6px 0;">Nenhum chamado aberto!</div>', 
@@ -570,7 +800,7 @@ function views() {
 
     const orcLista = orcAguardando.concat(orcProblema);
     let htmlOrc = card(
-      linkTitulo('💰 Cotações e Orçamento que precisam de atenção', 'orc', ''),
+      linkTitulo('Cotações e Orçamento que precisam de atenção', 'orc', ''),
       orcLista.length
         ? `<div style="max-height: 160px; overflow-y: auto;">${orcLista.map(orcRowHoje).join('')}</div>`
         : '<div class="empty">Nenhum orçamento com pendência.</div>', 
@@ -578,7 +808,7 @@ function views() {
     );
 
     let htmlDocs = card(
-      linkTitulo('📄 Recibos Docentes Pendentes (esta semana)', 'semana', 'docs'),
+      linkTitulo('Recibos Docentes Pendentes (esta semana)', 'semana', 'docs'),
       pendDocs.length
         ? `<div style="max-height: 200px; overflow-y: auto;">${pendDocs.map(docRowHoje).join('')}</div>`
         : '<div class="empty">Tudo em dia para a semana atual.</div>',
@@ -611,6 +841,43 @@ function views() {
   return '';
 }
 
+function views() {
+  const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
+  const htmlAba = renderTabAtiva();
+
+  if (!termosBusca.length) {
+    return htmlAba;
+  }
+
+  const dadosBusca = coletarResultadosBuscaGlobal(termosBusca);
+  const totalOp = dadosBusca.resReparos.length + dadosBusca.resDocs.length;
+  const totalOrc = dadosBusca.resOrc.length + dadosBusca.resOrcHist.length;
+  const totalGeral = dadosBusca.resAulas.length + totalOp + totalOrc;
+  const expandida = typeof buscaGlobalExpandida !== 'undefined' && buscaGlobalExpandida;
+
+  const barraBuscaHtml = `
+    <div class="global-search-bar-status">
+      <div class="global-search-status-info">
+        <span><span class="ui-glyph" aria-hidden="true">⌕</span> Filtrando aba ativa por <b>"${esc(buscaGlobalTermo.trim())}"</b></span>
+        <div class="global-search-scope-chips">
+          <button type="button" class="global-search-scope-btn ${tab === 'aulas' ? 'active' : ''}" data-act="ir_aba_busca" data-tab="aulas" data-sub="quadro">Aulas (${dadosBusca.resAulas.length})</button>
+          <button type="button" class="global-search-scope-btn ${tab === 'semana' ? 'active' : ''}" data-act="ir_aba_busca" data-tab="semana">Operacional (${totalOp})</button>
+          <button type="button" class="global-search-scope-btn ${tab === 'orc' ? 'active' : ''}" data-act="ir_aba_busca" data-tab="orc">Orçamento (${totalOrc})</button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        <button type="button" class="b ${expandida ? 'p' : ''}" data-act="toggle_busca_geral" style="font-size:12px; padding:5px 10px;">
+          ${expandida ? 'Ocultar visão geral' : `Ver todos no painel (${totalGeral})`}
+        </button>
+        <button type="button" class="b" data-act="limparBuscaGlobal" style="font-size:12px; padding:5px 10px;">✕ Limpar</button>
+      </div>
+    </div>
+  `;
+
+  const mostrarPainelGeral = expandida || (tab === 'hoje' && buscaGlobalTipo !== 'todos');
+  return barraBuscaHtml + htmlAba + (mostrarPainelGeral ? renderResultadosBuscaGeral(termosBusca, dadosBusca) : '');
+}
+
 // --- MOTOR DE DESENHO (RENDER) ---
 function render() {
   const navEl = document.getElementById('nav');
@@ -625,7 +892,7 @@ function render() {
     try { selStart = active.selectionStart; selEnd = active.selectionEnd; } catch (e) {} 
   }
   
-  navEl.innerHTML = TABS.map(([k, n]) => `<button class="${k === tab && !buscaGlobalTermo ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('');
+  navEl.innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('');
   
   vEl.innerHTML = views();
 
@@ -645,19 +912,6 @@ function render() {
     drawerCont.innerHTML = renderDrawer();
   }
 
-  const selTipo = document.getElementById('filtroTipoGlobal');
-  if (selTipo && document.activeElement !== selTipo) {
-    if (buscaGlobalTermo.trim()) {
-      selTipo.value = buscaGlobalTipo || 'todos';
-    } else {
-      if (tab === 'aulas') selTipo.value = 'aulas';
-      else if (tab === 'semana') selTipo.value = 'operacional';
-      else if (tab === 'orc') selTipo.value = 'orc';
-      else if (tab === 'hoje') selTipo.value = 'todos';
-      else selTipo.value = buscaGlobalTipo || 'todos';
-    }
-  }
-
   const btnLimpar = document.getElementById('btnLimparBuscaTop');
   if (btnLimpar) {
     btnLimpar.style.display = buscaGlobalTermo.trim() ? 'block' : 'none';
@@ -667,6 +921,9 @@ function render() {
   if (modalSettings && modalSettings.style && modalSettings.style.display !== 'none') {
     renderModalSystemSettings();
   }
+
+  renderSearchFilterPopover();
+  renderSheetsPopover();
 
   if (activeId) {
     const el = document.getElementById(activeId);
@@ -690,14 +947,12 @@ document.addEventListener('input', e => {
     resumoTextoCustomizado = e.target.innerText;
     return;
   }
-  if (e.target.id === 'buscaAulas') { 
-    buscaAulas = e.target.value; 
-    render(); 
-  }
   if (e.target.id === 'buscaGlobal') { 
     buscaGlobalTermo = e.target.value; 
     const btnLimpar = document.getElementById('btnLimparBuscaTop');
     if (btnLimpar) btnLimpar.style.display = buscaGlobalTermo.trim() ? 'block' : 'none';
+    const wrap = document.getElementById('globalSearchWrapper');
+    if (wrap) wrap.classList.toggle('has-clear', !!buscaGlobalTermo.trim());
     render(); 
   }
   
@@ -751,7 +1006,7 @@ function atualizarAvisoApelidoForm() {
 
   if (res.motivo === 'mesclado') {
     box.className = 'ap-form-aviso info';
-    box.textContent = `ℹ️ "${res.nome}" já está na lista — os novos apelidos serão mesclados ao cadastro existente.`;
+    box.textContent = `ℹ\uFE0E "${res.nome}" já está na lista — os novos apelidos serão mesclados ao cadastro existente.`;
     box.style.display = 'block';
   } else if (res.motivo === 'info_oficial') {
     box.className = 'ap-form-aviso info';
@@ -822,12 +1077,6 @@ document.addEventListener('keydown', e => {
       render();
       return;
     }
-    if (e.target.id === 'buscaAulas') {
-      e.preventDefault();
-      buscaAulas = e.target.value.trim();
-      render();
-      return;
-    }
     if (e.target.id === 'campoNovaTurmaManual') {
       e.preventDefault();
       const profInput = document.querySelector('form[data-form="aula_manual_nova"] input[name="prof"]');
@@ -850,6 +1099,14 @@ document.addEventListener('keydown', e => {
     const modalSettings = document.getElementById('modalSystemSettings');
     if (modalSettings && modalSettings.style.display !== 'none') {
       fecharModalConfig();
+    } else if (searchFilterAberto) {
+      searchFilterAberto = false;
+      renderSearchFilterPopover();
+    } else if (sheetsMenuAberto) {
+      sheetsMenuAberto = false;
+      sheetsFormModo = '';
+      sheetsEditId = '';
+      renderSheetsPopover();
     } else if (drawerAberto) {
       drawerAberto = false;
       render();
@@ -871,6 +1128,16 @@ document.addEventListener('wheel', e => {
 }, { passive: false });
 
 document.addEventListener('click', async e => {
+  if (searchFilterAberto && (!e.target || typeof e.target.closest !== 'function' || !e.target.closest('#globalSearchWrapper'))) {
+    searchFilterAberto = false;
+    renderSearchFilterPopover();
+  }
+  if (sheetsMenuAberto && (!e.target || typeof e.target.closest !== 'function' || !e.target.closest('#sheetsPopoverAnchor'))) {
+    sheetsMenuAberto = false;
+    sheetsFormModo = '';
+    sheetsEditId = '';
+    renderSheetsPopover();
+  }
   const modalSettings = document.getElementById('modalSystemSettings');
   if (modalSettings && e.target === modalSettings) {
     fecharModalConfig();
@@ -881,13 +1148,12 @@ document.addEventListener('click', async e => {
   
   if (t.dataset.tab && !t.dataset.act) { 
     tab = t.dataset.tab; 
-    buscaGlobalTermo = ''; 
-    if (tab === 'aulas') buscaGlobalTipo = 'aulas';
-    else if (tab === 'semana') buscaGlobalTipo = 'operacional';
-    else if (tab === 'orc') buscaGlobalTipo = 'orc';
-    else buscaGlobalTipo = 'todos';
-    const bg = document.getElementById('buscaGlobal'); 
-    if (bg) bg.value = ''; 
+    if (!buscaGlobalTermo.trim()) {
+      if (tab === 'aulas') buscaGlobalTipo = 'aulas';
+      else if (tab === 'semana') buscaGlobalTipo = 'operacional';
+      else if (tab === 'orc') buscaGlobalTipo = 'orc';
+      else buscaGlobalTipo = 'todos';
+    }
     render(); 
     return; 
   }
@@ -896,8 +1162,38 @@ document.addEventListener('click', async e => {
 
   if (a === 'set_filtro_busca') {
     buscaGlobalTipo = t.dataset.tipo || 'todos';
-    const sel = document.getElementById('filtroTipoGlobal');
-    if (sel) sel.value = buscaGlobalTipo;
+    render();
+    return;
+  }
+
+  if (a === 'toggle_search_filter') {
+    if (sheetsMenuAberto) {
+      sheetsMenuAberto = false;
+      sheetsFormModo = '';
+      sheetsEditId = '';
+      renderSheetsPopover();
+    }
+    searchFilterAberto = !searchFilterAberto;
+    renderSearchFilterPopover();
+    return;
+  }
+
+  if (a === 'search_filter_select') {
+    buscaGlobalTipo = t.dataset.tipo || 'todos';
+    if (buscaGlobalTipo === 'aulas') tab = 'aulas';
+    else if (buscaGlobalTipo === 'operacional') tab = 'semana';
+    else if (buscaGlobalTipo === 'orc') tab = 'orc';
+    else if (buscaGlobalTipo === 'todos') tab = 'hoje';
+    searchFilterAberto = false;
+    render();
+    return;
+  }
+
+  if (a === 'limpar_filtros_busca') {
+    buscaGlobalTipo = 'todos';
+    buscaGlobalExpandida = false;
+    if (!buscaGlobalTermo.trim()) tab = 'hoje';
+    searchFilterAberto = false;
     render();
     return;
   }
@@ -907,7 +1203,7 @@ document.addEventListener('click', async e => {
     const novo = atual === 'light' ? 'dark' : 'light';
     if (typeof aplicarTema === 'function') aplicarTema(novo);
     render();
-    toast(novo === 'light' ? '☀️ Modo Claro ativado' : '🌙 Modo Escuro ativado');
+    toast(novo === 'light' ? '☀\uFE0E Modo Claro ativado' : '☾ Modo Escuro ativado');
     return;
   }
 
@@ -915,7 +1211,74 @@ document.addEventListener('click', async e => {
     const novo = t.dataset.tema || 'dark';
     if (typeof aplicarTema === 'function') aplicarTema(novo);
     render();
-    toast(novo === 'light' ? '☀️ Modo Claro ativado' : '🌙 Modo Escuro ativado');
+    toast(novo === 'light' ? '☀\uFE0E Modo Claro ativado' : '☾ Modo Escuro ativado');
+    return;
+  }
+
+  if (a === 'toggle_sheets_menu') {
+    if (searchFilterAberto) {
+      searchFilterAberto = false;
+      renderSearchFilterPopover();
+    }
+    sheetsMenuAberto = !sheetsMenuAberto;
+    if (!sheetsMenuAberto) {
+      sheetsFormModo = '';
+      sheetsEditId = '';
+    }
+    renderSheetsPopover();
+    return;
+  }
+
+  if (a === 'sheets_open_new') {
+    const sheets = Array.isArray(S.supportSheets) ? S.supportSheets : [];
+    if (sheets.length >= MAX_SUPPORT_SHEETS) {
+      toast(`Limite máximo de ${MAX_SUPPORT_SHEETS} planilhas atingido.`);
+      return;
+    }
+    sheetsFormModo = 'new';
+    sheetsEditId = '';
+    renderSheetsPopover();
+    setTimeout(() => {
+      const inp = document.getElementById('inpSheetTask');
+      if (inp) inp.focus();
+    }, 30);
+    return;
+  }
+
+  if (a === 'sheets_edit') {
+    sheetsFormModo = 'edit';
+    sheetsEditId = id || '';
+    renderSheetsPopover();
+    setTimeout(() => {
+      const inp = document.getElementById('inpSheetTask');
+      if (inp) inp.focus();
+    }, 30);
+    return;
+  }
+
+  if (a === 'sheets_cancel_form') {
+    sheetsFormModo = '';
+    sheetsEditId = '';
+    renderSheetsPopover();
+    return;
+  }
+
+  if (a === 'sheets_del') {
+    confirmarExclusao(t, () => {
+      S.supportSheets = (S.supportSheets || []).filter(x => x.id !== id);
+      if (sheetsEditId === id) {
+        sheetsFormModo = '';
+        sheetsEditId = '';
+      }
+      save();
+      render();
+      toast('Planilha removida!');
+    });
+    return;
+  }
+
+  if (a === 'sheets_invalid_link') {
+    toast('Link inválido. Edite a planilha para corrigir a URL.');
     return;
   }
 
@@ -956,6 +1319,38 @@ document.addEventListener('click', async e => {
     save();
     render();
     toast(`${removidos} lembretes concluídos removidos!`);
+    return;
+  }
+
+  if (a === 'toggle_nova_tag_nota') {
+    novaTagNotaAberta = !novaTagNotaAberta;
+    render();
+    if (novaTagNotaAberta) {
+      setTimeout(() => {
+        const inp = document.getElementById('inpNovaTagNota');
+        if (inp) inp.focus();
+      }, 40);
+    }
+    return;
+  }
+
+  if (a === 'nota_sel_tag') {
+    const tagVal = (t.dataset.tag || '').trim();
+    if (tagVal) {
+      notaTagSelecionada = (norm(notaTagSelecionada) === norm(tagVal)) ? '' : tagVal;
+      render();
+    }
+    return;
+  }
+
+  if (a === 'nota_del_tag') {
+    const tagVal = (t.dataset.tag || '').trim();
+    if (tagVal && typeof removerPreset === 'function') {
+      if (norm(notaTagSelecionada) === norm(tagVal)) {
+        notaTagSelecionada = '';
+      }
+      removerPreset('notas', 'etiquetas', tagVal);
+    }
     return;
   }
 
@@ -1070,14 +1465,14 @@ document.addEventListener('click', async e => {
     const inp = document.getElementById('cad_linkCompra');
     if (!inp || !inp.value.trim()) return toast('Cole o link do produto primeiro.');
     t.disabled = true;
-    t.textContent = '⏳ Encurtando...';
+    t.textContent = '… Encurtando...';
     if (typeof encurtarUrlAmigavel === 'function') {
       const urlEncurtada = await encurtarUrlAmigavel(inp.value);
       inp.value = urlEncurtada;
       toast('Link higienizado!');
     }
     t.disabled = false;
-    t.textContent = '✂️ Encurtar';
+    t.innerHTML = '<span class="ui-glyph" aria-hidden="true">✂\uFE0E</span> Encurtar';
     return;
   }
 
@@ -1085,7 +1480,7 @@ document.addEventListener('click', async e => {
     const inp = document.getElementById('orc_linkFornecedor');
     if (!inp || !inp.value.trim()) return toast('Cole o link de compra primeiro.');
     t.disabled = true;
-    t.textContent = '⏳ Encurtando...';
+    t.textContent = '… Encurtando...';
     if (typeof encurtarUrlAmigavel === 'function') {
       const urlEncurtada = await encurtarUrlAmigavel(inp.value);
       inp.value = urlEncurtada;
@@ -1095,7 +1490,7 @@ document.addEventListener('click', async e => {
       toast('Link higienizado!');
     } else {
       t.disabled = false;
-      t.textContent = '✂️ Encurtar';
+      t.innerHTML = '<span class="ui-glyph" aria-hidden="true">✂\uFE0E</span> Encurtar';
     }
     return;
   }
@@ -1162,6 +1557,9 @@ document.addEventListener('click', async e => {
         const orientacao = w > h ? 'landscape' : 'portrait';
         if (i === 0) {
           doc = new jsPDF({ orientation: orientacao, unit: 'px', format: [w, h] });
+          if (typeof doc.setProperties === 'function') {
+            doc.setProperties({ title: 'ARGOS OPS — Compilado de Imagens', creator: 'ARGOS OPS' });
+          }
         } else {
           doc.addPage([w, h], orientacao);
         }
@@ -1172,7 +1570,7 @@ document.addEventListener('click', async e => {
 
       const nomeFinal = arquivos.length === 1
         ? arquivos[0].name.replace(/\.[^.]+$/, '') + '.pdf'
-        : `compilado-imagens-${hoje}.pdf`;
+        : `argos-ops-compilado-${hoje}.pdf`;
 
       doc.save(nomeFinal);
       toast('PDF descarregado com sucesso!');
@@ -1196,23 +1594,47 @@ document.addEventListener('click', async e => {
 
   if (a === 'limparBuscaGlobal') { 
     buscaGlobalTermo = ''; 
+    buscaGlobalExpandida = false;
     const el = document.getElementById('buscaGlobal'); 
     if (el) el.value = ''; 
     const btnLimpar = document.getElementById('btnLimparBuscaTop');
     if (btnLimpar) btnLimpar.style.display = 'none';
+    const wrap = document.getElementById('globalSearchWrapper');
+    if (wrap) wrap.classList.remove('has-clear');
     render(); 
     if (el) el.focus();
     return;
   }
-  if (a === 'limpar_busca_aulas') { 
-    buscaAulas = ''; 
-    const el = document.getElementById('buscaAulas'); 
-    if (el) el.value = ''; 
-    render(); 
+  if (a === 'toggle_busca_geral') {
+    buscaGlobalExpandida = !buscaGlobalExpandida;
+    render();
+    return;
+  }
+  if (a === 'ir_aba_busca') {
+    tab = t.dataset.tab || 'hoje';
+    if (t.dataset.sub) {
+      if (tab === 'aulas') subTabAulas = t.dataset.sub;
+      if (tab === 'semana') subTabSemana = t.dataset.sub;
+    }
+    render();
+    return;
   }
   if (a === 'limparDestaques') { S.aulas.forEach(item => { item.destaque = null; }); save(); render(); toast('Avisos removidos'); }
 
-  if (a === 'del_aula') confirmarExclusao(t, () => { S.aulas = S.aulas.filter(x => x.id !== id); save(); render(); toast('Excluída'); });
+  if (a === 'del_aula') confirmarExclusao(t, () => {
+    const aulaAlvo = S.aulas.find(x => x.id === id);
+    S.aulas = S.aulas.filter(x => x.id !== id);
+    if (aulaAlvo && aulaAlvo.turma) {
+      const kTurma = norm(aulaAlvo.turma);
+      const aindaTem = S.aulas.some(x => norm(x.turma) === kTurma);
+      if (aindaTem) {
+        if (typeof touchCronograma === 'function') touchCronograma(aulaAlvo.turma, false, new Date().toISOString());
+      } else if (S.cronogramas && Object.prototype.hasOwnProperty.call(S.cronogramas, kTurma)) {
+        delete S.cronogramas[kTurma];
+      }
+    }
+    save(); render(); toast('Excluída');
+  });
   if (a === 'del_reparo') confirmarExclusao(t, () => { S.reparos = S.reparos.filter(x => x.id !== id); save(); render(); toast('Excluído'); });
   if (a === 'del_orcitem') confirmarExclusao(t, () => { S.orc.itens = S.orc.itens.filter(x => x.id !== id); save(); render(); toast('Cotação excluída'); });
   if (a === 'del_orchist') confirmarExclusao(t, () => { S.orcHist = S.orcHist.filter(x => x.id !== id); save(); render(); toast('Removido'); });
@@ -1220,8 +1642,17 @@ document.addEventListener('click', async e => {
   if (a === 'limpar_aulas_passadas') {
     confirmarExclusao(t, () => {
       const antes = S.aulas.length;
+      const turmasAntes = new Set(S.aulas.map(x => norm(x.turma)).filter(Boolean));
       S.aulas = S.aulas.filter(x => x.dia >= hoje);
       const removidas = antes - S.aulas.length;
+      if (removidas > 0 && S.cronogramas) {
+        const turmasRestantes = new Set(S.aulas.map(x => norm(x.turma)).filter(Boolean));
+        turmasAntes.forEach(kTurma => {
+          if (!turmasRestantes.has(kTurma) && Object.prototype.hasOwnProperty.call(S.cronogramas, kTurma)) {
+            delete S.cronogramas[kTurma];
+          }
+        });
+      }
       save(); 
       render(); 
       toast(`${removidas} aulas passadas removidas com segurança!`);
@@ -1251,12 +1682,12 @@ document.addEventListener('click', async e => {
   if (a === 'forcar_sync_nuvem') {
     const supaOk = typeof supabaseConfigurado === 'function' && supabaseConfigurado();
     if (!supaOk) {
-      toast('⚠️ Supabase não configurado. Modo offline ativo.');
+      toast('⚠\uFE0E Supabase não configurado. Modo offline ativo.');
       render();
       return;
     }
 
-    toast('🔄 Sincronizando com o Supabase...');
+    toast('↻ Sincronizando com o Supabase...');
     let ok = false;
     if (typeof sbPendenciasLocais !== 'undefined' && sbPendenciasLocais && typeof enviarEstadoParaNuvem === 'function') {
       if (typeof sbSyncTimer !== 'undefined') clearTimeout(sbSyncTimer);
@@ -1267,9 +1698,9 @@ document.addEventListener('click', async e => {
 
     render();
     if (ok) {
-      toast('☁️ Painel sincronizado com sucesso!');
+      toast('☁\uFE0E ARGOS OPS sincronizado com sucesso!');
     } else {
-      toast('⚠️ Não foi possível sincronizar. Modo offline ativo.');
+      toast('⚠\uFE0E Não foi possível sincronizar. Modo offline ativo.');
     }
     return;
   }
@@ -1285,8 +1716,13 @@ document.addEventListener('click', async e => {
         .filter(au => au.dia >= hoje && !au.materialPronto && norm(au.turma) === norm(item.turma))
         .sort((p, q) => (p.dia + (p.hora || '')).localeCompare(q.dia + (q.hora || '')))[0];
       if (proximaAula) {
+        const agoraIso = new Date().toISOString();
         proximaAula.materialPronto = true;
         proximaAula.materialConcluidoEm = hoje;
+        proximaAula.modificadoEm = agoraIso;
+        if (proximaAula.turma && typeof touchCronograma === 'function') {
+          touchCronograma(proximaAula.turma, false, agoraIso);
+        }
         baixadas++;
       }
     });
@@ -1294,8 +1730,8 @@ document.addEventListener('click', async e => {
     save();
     render();
     toast(baixadas > 0
-      ? `✅ Envio concluído! ${baixadas} pendência(s) de material baixada(s).`
-      : '✅ Fila concluída e limpa! Nenhuma pendência futura encontrada para as turmas da fila.');
+      ? `✓ Envio concluído! ${baixadas} pendência(s) de material baixada(s).`
+      : '✓ Fila concluída e limpa! Nenhuma pendência futura encontrada para as turmas da fila.');
     return;
   }
   if (a === 'copiar_fila') {
@@ -1306,9 +1742,9 @@ document.addEventListener('click', async e => {
   if (a === 'rel') {
     const ab = S.reparos.filter(x => x.status !== 'Concluído');
     const co = S.reparos.filter(x => x.status === 'Concluído');
-    let txt = `*RELATÓRIO DE REPAROS E MANUTENÇÃO - ${br(hoje)}*\n\n📌 EM ABERTO / ANDAMENTO (${ab.length}):\n`;
+    let txt = `*ARGOS OPS • RELATÓRIO DE REPAROS E MANUTENÇÃO - ${br(hoje)}*\n\n▪ EM ABERTO / ANDAMENTO (${ab.length}):\n`;
     txt += ab.map(r => `• ${r.local ? `*${r.local}*: ` : ''}${r.item}\n  - Aberto em: ${br(r.dataReg || hoje)}${r.resp ? ` | Resp: ${r.resp}` : ''}${r.obs ? ` | Obs: ${r.obs}` : ''}`).join('\n') || 'Nenhum chamado aberto.\n';
-    txt += `\n\n✅ FINALIZADOS RECENTEMENTE (${co.length}):\n`;
+    txt += `\n\n✓ FINALIZADOS RECENTEMENTE (${co.length}):\n`;
     txt += co.map(r => `• ${r.local ? `${r.local} - ` : ''}${r.item}${r.dataConc ? ` (concluído em ${br(r.dataConc)})` : ''}`).join('\n') || 'Nenhum chamado concluído.';
     copy(txt);
   }
@@ -1337,12 +1773,13 @@ document.addEventListener('click', async e => {
     return;
   }
   if (a === 'orc_set_filtro_hist_modo') {
-    orcHistFiltrarModo = t.dataset.v === 'modo';
+    const v = t.dataset.v;
+    orcHistFiltroModo = (v === 'comparativo_fornecedores' || v === 'pedido_fornecedor') ? v : 'todos';
     render();
     return;
   }
   if (a === 'orc_tog_filtro_hist_modo') {
-    orcHistFiltrarModo = !orcHistFiltrarModo;
+    orcHistFiltroModo = 'todos';
     render();
     return;
   }
@@ -1403,7 +1840,7 @@ document.addEventListener('click', async e => {
       const modoHist = h.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
       modoOrcamentoAtual = modoHist;
       S.orc = { 
-        inst: S.orc.inst || 'Prius',
+        inst: (S.orc.inst && S.orc.inst !== 'Prius') ? S.orc.inst : 'ARGOS OPS',
         modo: modoHist,
         titulo: h.titulo || '', 
         fornecedor: h.fornecedor || '',
@@ -1422,11 +1859,11 @@ document.addEventListener('click', async e => {
       orcFornHistorico = '';
       orcItemHistorico = '';
       orcSlideAtivo = 0;
-      save(); render(); toast('📊 Pedido carregado com comparação de reajuste ativa!');
+      save(); render(); toast('▪ Orçamento carregado no modo correspondente com comparação ativa!');
     }
   }
   if (a === 'orcnovo') {
-    if (!orcAsk) { orcAsk = true; t.textContent = 'Confirmar limpeza?'; setTimeout(() => { orcAsk = false; if (t.isConnected) t.textContent = '🧹 Limpar'; }, 3000); return; }
+    if (!orcAsk) { orcAsk = true; t.textContent = 'Confirmar limpeza?'; setTimeout(() => { orcAsk = false; if (t.isConnected) t.innerHTML = '<span class="ui-glyph" aria-hidden="true">✕</span> Limpar'; }, 3000); return; }
     orcAsk = false;
     const modoAtual = typeof orcModo === 'function' ? orcModo(S.orc) : 'comparativo_fornecedores';
     S.orc = { inst: S.orc.inst, modo: modoAtual, titulo: '', fornecedor: '', link: '', categoria: '', unidade: '', solic: S.orc.solic, data: hoje, obs: '', qtdTotal: '', itens: [] }; 
@@ -1441,7 +1878,18 @@ document.addEventListener('click', async e => {
   }
   if (a === 'bkp_reverter') reverterSnapshot();
   if (a === 'crsub') { destPre = destPre === t.dataset.t ? '' : t.dataset.t; render(); if (destPre) toast('Envie o PDF novo acima'); }
-  if (a === 'crdel') { confirmarExclusao(t, () => { S.aulas = S.aulas.filter(x => x.turma !== t.dataset.t); if (destPre === t.dataset.t) destPre = ''; save(); render(); toast('Cronograma apagado'); }); }
+  if (a === 'crdel') {
+    confirmarExclusao(t, () => {
+      const alvo = t.dataset.t;
+      S.aulas = S.aulas.filter(x => x.turma !== alvo);
+      if (S.cronogramas && alvo) {
+        const kTurma = norm(alvo);
+        if (Object.prototype.hasOwnProperty.call(S.cronogramas, kTurma)) delete S.cronogramas[kTurma];
+      }
+      if (destPre === alvo) destPre = '';
+      save(); render(); toast('Cronograma apagado');
+    });
+  }
   if (a === 'toggle_apelidos_box') {
     apelidosAberto = !apelidosAberto;
     render();
@@ -1473,10 +1921,10 @@ document.addEventListener('click', async e => {
       if (aplicados > 0) {
         save();
         render();
-        toast(`✅ ${aplicados} sugestão(ões) aplicada(s)!`);
+        toast(`✓ ${aplicados} sugestão(ões) aplicada(s)!`);
       } else {
         render();
-        toast(ultimoAviso || 'ℹ️ Nenhuma nova sugestão para aplicar.');
+        toast(ultimoAviso || 'ℹ\uFE0E Nenhuma nova sugestão para aplicar.');
       }
     }
     return;
@@ -1539,6 +1987,15 @@ document.addEventListener('click', async e => {
         if (typeof removerPreset === 'function') removerPreset(cat, sub, val);
       }
     }
+    return;
+  }
+  if (a === 'prof_preset_tab') {
+    profPresetSubAtual = t.dataset.sub || 'disciplinas';
+    renderModalSystemSettings();
+    setTimeout(() => {
+      const inp = document.getElementById('profPresetInputNome');
+      if (inp) inp.focus();
+    }, 30);
     return;
   }
 });
@@ -1616,23 +2073,19 @@ document.addEventListener('change', async e => {
     }
     return;
   }
-  if (t.id === 'filtroTipoGlobal') {
-    buscaGlobalTipo = t.value;
-    if (!buscaGlobalTermo.trim()) {
-      if (buscaGlobalTipo === 'aulas') tab = 'aulas';
-      else if (buscaGlobalTipo === 'operacional') tab = 'semana';
-      else if (buscaGlobalTipo === 'orc') tab = 'orc';
-      else if (buscaGlobalTipo === 'todos') tab = 'hoje';
-    }
-    render();
-    return;
-  }
   if (a === 'tog') { 
     const item = find(t.dataset.l, t.dataset.id); 
     if (item) { 
+      const agoraIso = new Date().toISOString();
       item[t.dataset.f] = t.checked; 
-      if (t.dataset.f === 'confirmada' && t.checked) item.destaque = null; 
-      if (t.dataset.f === 'materialPronto') item.materialConcluidoEm = t.checked ? hoje : null;
+      if (t.dataset.l === 'aulas') {
+        if (t.dataset.f === 'confirmada' && t.checked) item.destaque = null; 
+        if (t.dataset.f === 'materialPronto') item.materialConcluidoEm = t.checked ? hoje : null;
+        item.modificadoEm = agoraIso;
+        if (item.turma && typeof touchCronograma === 'function') {
+          touchCronograma(item.turma, false, agoraIso);
+        }
+      }
       save(); 
       render(); 
     } 
@@ -1641,7 +2094,15 @@ document.addEventListener('change', async e => {
     const item = (S.lembretes || []).find(x => x.id === t.dataset.id);
     if (item) { item.feito = t.checked; save(); render(); }
   }
-  if (a === 'doc') { const d = S.docs[t.dataset.k] = S.docs[t.dataset.k] || {}; d[t.dataset.f] = t.checked; save(); render(); }
+  if (a === 'doc') {
+    const kDoc = t.dataset.k;
+    if (kDoc && kDoc !== '__proto__' && kDoc !== 'constructor' && kDoc !== 'prototype') {
+      const d = S.docs[kDoc] = Object.prototype.hasOwnProperty.call(S.docs, kDoc) && S.docs[kDoc] ? S.docs[kDoc] : {};
+      d[t.dataset.f] = t.checked;
+      save();
+      render();
+    }
+  }
   if (a === 'rep_obs') { const r = find('reparos', t.dataset.id); if (r) { r.obs = t.value; save(); } }
   if (a === 'rep_st') { const r = find('reparos', t.dataset.id); if (r) { r.status = t.value; r.feito = (t.value === 'Concluído'); r.dataConc = r.feito ? hoje : ''; save(); render(); } }
   if (a === 'rep_check') { const r = find('reparos', t.dataset.id); if (r) { r.status = t.checked ? 'Concluído' : 'Pendente'; r.feito = t.checked; r.dataConc = t.checked ? hoje : ''; save(); render(); } }
@@ -1654,11 +2115,56 @@ document.addEventListener('change', async e => {
       render();
     }
   }
-  if (a === 'ae') { const item = find('aulas', t.dataset.id); if (item) { item[t.dataset.f] = t.value.trim(); save(); t.classList.toggle('miss', !t.value.trim()); } }
-  if (a === 'ae_sel') { const item = find('aulas', t.dataset.id); if (item) { item[t.dataset.f] = t.value; save(); } }
+  if (a === 'ae') {
+    const item = find('aulas', t.dataset.id);
+    if (item) {
+      const campo = t.dataset.f;
+      if (campo === '__proto__' || campo === 'constructor' || campo === 'prototype') return;
+      const novoValor = t.value.trim();
+      const anterior = item[campo] == null ? '' : String(item[campo]);
+      if (anterior !== novoValor) {
+        const agoraIso = new Date().toISOString();
+        item[campo] = novoValor;
+        item.modificadoEm = agoraIso;
+        if (campo === 'turma') {
+          if (anterior && S.aulas.some(x => x.id !== item.id && norm(x.turma) === norm(anterior))) {
+            if (typeof touchCronograma === 'function') touchCronograma(anterior, false, agoraIso);
+          } else if (anterior && S.cronogramas && Object.prototype.hasOwnProperty.call(S.cronogramas, norm(anterior))) {
+            delete S.cronogramas[norm(anterior)];
+          }
+          if (novoValor && typeof touchCronograma === 'function') {
+            const eraNova = !S.aulas.some(x => x.id !== item.id && norm(x.turma) === norm(novoValor));
+            touchCronograma(novoValor, eraNova, agoraIso);
+          }
+        } else if (item.turma && typeof touchCronograma === 'function') {
+          touchCronograma(item.turma, false, agoraIso);
+        }
+        save();
+      }
+      t.classList.toggle('miss', !novoValor);
+    }
+  }
+  if (a === 'ae_sel') {
+    const item = find('aulas', t.dataset.id);
+    if (item) {
+      const campo = t.dataset.f;
+      if (campo === '__proto__' || campo === 'constructor' || campo === 'prototype') return;
+      const novoValor = t.value;
+      const anterior = item[campo] == null ? '' : String(item[campo]);
+      if (anterior !== novoValor) {
+        const agoraIso = new Date().toISOString();
+        item[campo] = novoValor;
+        item.modificadoEm = agoraIso;
+        if (item.turma && typeof touchCronograma === 'function') {
+          touchCronograma(item.turma, false, agoraIso);
+        }
+        save();
+      }
+    }
+  }
   if (a === 'prof_perfil_upd') {
     const key = t.dataset.key;
-    if (key && S.profPerfis && S.profPerfis[key]) {
+    if (key && key !== '__proto__' && key !== 'constructor' && key !== 'prototype' && S.profPerfis && Object.prototype.hasOwnProperty.call(S.profPerfis, key)) {
       S.profPerfis[key][t.dataset.f] = t.value;
       save();
     }
@@ -1698,10 +2204,20 @@ document.addEventListener('change', async e => {
   if (t.id === 'dest' && pend) { dest = t.value; if (typeof montar === 'function') montar(); render(); }
   if (t.id === 'nomeNovo' && pend) { nomeNovo = t.value; if (typeof montar === 'function') montar(); render(); }
   if (t.dataset.orc) {
-    S.orc[t.dataset.orc] = t.value;
+    const campo = t.dataset.orc;
+    if (campo === '__proto__' || campo === 'constructor' || campo === 'prototype') return;
+    if (campo === 'link') {
+      const linkLimpo = typeof sanitizeOptionalLink === 'function' ? sanitizeOptionalLink(t.value) : t.value.trim();
+      if (t.value.trim() && !linkLimpo) {
+        toast('URL inválida. Informe um link http:// ou https:// válido.');
+      }
+      S.orc.link = linkLimpo;
+    } else {
+      S.orc[campo] = t.value;
+    }
     save();
-    if (t.dataset.orc === 'qtdTotal' && typeof orcTotals === 'function') orcTotals();
-    if (t.dataset.orc === 'link' || t.dataset.orc === 'fornecedor' || t.dataset.orc === 'data' || t.dataset.orc === 'categoria' || t.dataset.orc === 'unidade') render();
+    if (campo === 'qtdTotal' && typeof orcTotals === 'function') orcTotals();
+    if (campo === 'link' || campo === 'fornecedor' || campo === 'data' || campo === 'categoria' || campo === 'unidade') render();
   }
 });
 
@@ -1713,18 +2229,25 @@ document.addEventListener('submit', e => {
   const d = Object.fromEntries(new FormData(e.target)), id = uid();
   
   if (f === 'aula') {
+    const agoraIso = new Date().toISOString();
+    const turmaVal = (d.turma || '').trim();
+    const eraNova = turmaVal ? !S.aulas.some(x => norm(x.turma) === norm(turmaVal)) : false;
     S.aulas.push({
       id,
       prof: (d.prof || '').trim(),
-      turma: (d.turma || '').trim(),
+      turma: turmaVal,
       turno: (d.turno || '').trim(),
       dia: d.dia,
       hora: (d.hora || '').trim(),
       desc: (d.desc || '').trim(),
       confirmada: false,
       destaque: 'nova',
-      modificadoEm: new Date().toISOString()
+      createdAt: agoraIso,
+      modificadoEm: agoraIso
     });
+    if (turmaVal && typeof touchCronograma === 'function') {
+      touchCronograma(turmaVal, eraNova, agoraIso);
+    }
     toast('Aula adicionada!');
   }
   
@@ -1742,6 +2265,35 @@ document.addEventListener('submit', e => {
     return;
   }
 
+  if (f === 'prof_preset_add') {
+    const sub = (d.sub || (typeof profPresetSubAtual === 'string' ? profPresetSubAtual : 'disciplinas')).trim();
+    const nome = (d.nome || '').trim();
+    if (nome && typeof adicionarPreset === 'function') {
+      const ok = adicionarPreset('professores', sub, nome);
+      if (ok) {
+        setTimeout(() => {
+          const inp = document.getElementById('profPresetInputNome');
+          if (inp) inp.focus();
+        }, 30);
+      }
+    }
+    return;
+  }
+
+  if (f === 'nova_tag_nota') {
+    const tagNome = (d.tag || '').trim();
+    if (!tagNome) return;
+    if (typeof adicionarPreset === 'function') {
+      const ok = adicionarPreset('notas', 'etiquetas', tagNome);
+      if (ok) {
+        notaTagSelecionada = tagNome;
+        novaTagNotaAberta = false;
+        render();
+      }
+    }
+    return;
+  }
+
   // Submissão de Lembrete Rápido
   if (f === 'novo_lembrete') {
     const txt = (d.texto || '').trim();
@@ -1752,6 +2304,7 @@ document.addEventListener('submit', e => {
     S.lembretes.unshift({
       id,
       texto: txt,
+      tag: (typeof notaTagSelecionada === 'string' ? notaTagSelecionada.trim() : ''),
       feito: false,
       hora,
       data: br(hoje)
@@ -1770,6 +2323,8 @@ document.addEventListener('submit', e => {
   if (f === 'aula_manual_nova') {
     const turma = typeof novaTurmaManualNome !== 'undefined' ? novaTurmaManualNome.trim() : '';
     if (!turma) return toast('Informe o nome da turma primeiro!');
+    const agoraIso = new Date().toISOString();
+    const eraNova = !S.aulas.some(x => norm(x.turma) === norm(turma));
     S.aulas.push({
       id,
       turma,
@@ -1780,8 +2335,12 @@ document.addEventListener('submit', e => {
       desc: (d.desc || '').trim(),
       confirmada: false,
       destaque: 'nova',
-      modificadoEm: new Date().toISOString()
+      createdAt: agoraIso,
+      modificadoEm: agoraIso
     });
+    if (typeof touchCronograma === 'function') {
+      touchCronograma(turma, eraNova, agoraIso);
+    }
     save();
     render();
     toast('Aula adicionada à turma!');
@@ -1810,7 +2369,11 @@ document.addEventListener('submit', e => {
   
   if (f === 'fila_material') {
     S.filaMateriais = S.filaMateriais || [];
-    S.filaMateriais.push({ turma: d.turma.trim(), caminho: d.caminho.trim() });
+    S.filaMateriais.push({
+      turma: (d.turma || '').trim(),
+      caminho: (d.caminho || '').trim(),
+      formaEnvio: (d.formaEnvio || '').trim()
+    });
     save(); render(); toast('Material adicionado à fila!');
     e.target.reset();
     return;
@@ -1818,13 +2381,18 @@ document.addEventListener('submit', e => {
 
   if (f === 'orcitem') {
     const forn = d.forn.trim();
+    const rawLink = (d.link || '').trim();
+    const safeLink = rawLink && typeof sanitizeOptionalLink === 'function' ? sanitizeOptionalLink(rawLink) : rawLink;
+    if (rawLink && !safeLink) {
+      toast('Link inválido ignorado. Utilize http:// ou https://.');
+    }
     S.orc.itens.push({ 
       id, 
       forn, 
       precoSemFrete: d.precoSemFrete.trim(), 
       frete: (d.frete || '').trim(), 
       valorUnd: (d.valorUnd || '').trim(), 
-      link: (d.link || '').trim(), 
+      link: safeLink, 
       status: 'Aguardando aprovação' 
     });
     if (forn && !S.fornecedores.includes(forn)) S.fornecedores.push(forn);
@@ -1849,6 +2417,38 @@ document.addEventListener('submit', e => {
       const inp = document.getElementById('ped_nomeItem');
       if (inp) inp.focus();
     }, 30);
+    return;
+  }
+
+  if (f === 'support_sheet') {
+    const task = (d.task || '').trim();
+    const rawUrl = (d.url || '').trim();
+    if (!task) return toast('Informe o nome da tarefa ou planilha.');
+    const cleanUrl = typeof safeHttpUrl === 'function' ? safeHttpUrl(rawUrl) : rawUrl;
+    if (!cleanUrl) return toast('Informe um link válido (ex.: https://docs.google.com/...).');
+
+    S.supportSheets = Array.isArray(S.supportSheets) ? S.supportSheets : [];
+    if (sheetsFormModo === 'edit' && sheetsEditId) {
+      const alvo = S.supportSheets.find(x => x.id === sheetsEditId);
+      if (alvo) {
+        alvo.task = task;
+        alvo.url = cleanUrl;
+        toast('Planilha atualizada!');
+      }
+    } else {
+      if (S.supportSheets.length >= MAX_SUPPORT_SHEETS) {
+        sheetsFormModo = '';
+        sheetsEditId = '';
+        renderSheetsPopover();
+        return toast(`Limite máximo de ${MAX_SUPPORT_SHEETS} planilhas atingido.`);
+      }
+      S.supportSheets.push({ id, task, url: cleanUrl });
+      toast('Planilha adicionada!');
+    }
+    sheetsFormModo = '';
+    sheetsEditId = '';
+    save();
+    render();
     return;
   }
 

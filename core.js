@@ -1,6 +1,6 @@
 /* ========================================================
    CORE.JS - ESTADO GLOBAL, SUPABASE SYNC E UTILITÁRIOS
-   Painel Operacional Prius
+   ARGOS OPS
 ======================================================== */
 
 const KEY = 'prius-painel-v2';
@@ -268,20 +268,103 @@ const TABS = [
   ['orc', 'Orçamento']
 ];
 
+// Helpers de saneamento e validação de objetos/URLs
+function safePlainObj(v) {
+  const out = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const k of Object.keys(v)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+    out[k] = v[k];
+  }
+  return out;
+}
+
+function safeHttpUrl(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s || /[\u0000-\u001F\u007F\s]/.test(s) || s.startsWith('//')) return '';
+  let candidate = s;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate)) {
+    if (!/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}([:/?#].*)?$/.test(candidate)) return '';
+    candidate = 'https://' + candidate;
+  }
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    if (!u.hostname || (!u.hostname.includes('.') && u.hostname !== 'localhost')) return '';
+    return u.toString();
+  } catch (e) {
+    return '';
+  }
+}
+
+function sanitizeOptionalLink(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  if (/^\s*(javascript|data|vbscript|file):/i.test(s) || s.startsWith('//')) return '';
+  const valid = safeHttpUrl(s);
+  if (valid) return valid;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return '';
+  return s;
+}
+
 // Normalização e saneamento do objeto de estado S
 function normalizarEstado(raw) {
-  const obj = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+  const obj = safePlainObj(raw);
 
-  ['aulas', 'reparos', 'hist', 'orcHist', 'fornecedores', 'apelidos', 'filaMateriais', 'lembretes'].forEach(k => {
+  ['aulas', 'reparos', 'hist', 'orcHist', 'apelidos', 'filaMateriais', 'lembretes'].forEach(k => {
     if (!Array.isArray(obj[k])) obj[k] = [];
-    obj[k] = obj[k].filter(item => item && typeof item === 'object');
+    obj[k] = obj[k].filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => safePlainObj(item));
+  });
+  if (!Array.isArray(obj.fornecedores)) obj.fornecedores = [];
+  obj.fornecedores = obj.fornecedores.filter(item => typeof item === 'string' || (item && typeof item === 'object' && !Array.isArray(item)));
+
+  obj.docs = safePlainObj(obj.docs);
+  obj.cat = safePlainObj(obj.cat);
+  obj.meta = safePlainObj(obj.meta);
+  obj.profPerfis = safePlainObj(obj.profPerfis);
+  obj.presets = safePlainObj(obj.presets);
+  obj.cronogramas = safePlainObj(obj.cronogramas);
+  Object.keys(obj.cronogramas).forEach(k => {
+    const entry = obj.cronogramas[k];
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      delete obj.cronogramas[k];
+      return;
+    }
+    const clean = safePlainObj(entry);
+    obj.cronogramas[k] = {
+      nome: typeof clean.nome === 'string' ? clean.nome : '',
+      createdAt: (typeof clean.createdAt === 'string' || typeof clean.createdAt === 'number') ? clean.createdAt : '',
+      updatedAt: (typeof clean.updatedAt === 'string' || typeof clean.updatedAt === 'number') ? clean.updatedAt : ''
+    };
   });
 
-  obj.docs = obj.docs || {};
-  obj.cat = obj.cat || {};
-  obj.meta = obj.meta || {};
-  obj.profPerfis = (obj.profPerfis && typeof obj.profPerfis === 'object' && !Array.isArray(obj.profPerfis)) ? obj.profPerfis : {};
-  obj.presets = (obj.presets && typeof obj.presets === 'object') ? obj.presets : {};
+  const DEFAULT_SUPPORT_SHEETS = [
+    { id: 'sheet-1', task: 'Tarefa 1 — Planilha de Apoio', url: 'https://docs.google.com/spreadsheets/d/exemplo-1' },
+    { id: 'sheet-2', task: 'Tarefa 2 — Planilha de Apoio', url: 'https://docs.google.com/spreadsheets/d/exemplo-2' },
+    { id: 'sheet-3', task: 'Tarefa 3 — Planilha de Apoio', url: 'https://docs.google.com/spreadsheets/d/exemplo-3' },
+    { id: 'sheet-4', task: 'Tarefa 4 — Planilha de Apoio', url: 'https://docs.google.com/spreadsheets/d/exemplo-4' },
+    { id: 'sheet-5', task: 'Tarefa 5 — Planilha de Apoio', url: 'https://docs.google.com/spreadsheets/d/exemplo-5' },
+    { id: 'sheet-6', task: 'Tarefa 6 — Planilha de Apoio', url: 'https://docs.google.com/spreadsheets/d/exemplo-6' }
+  ];
+  if (!Array.isArray(obj.supportSheets)) {
+    obj.supportSheets = JSON.parse(JSON.stringify(DEFAULT_SUPPORT_SHEETS));
+  } else {
+    obj.supportSheets = obj.supportSheets
+      .filter(it => it && typeof it === 'object' && !Array.isArray(it))
+      .slice(0, 10)
+      .map(it => {
+        const clean = safePlainObj(it);
+        const task = String(clean.task || '').trim();
+        const url = safeHttpUrl(clean.url || '');
+        if (!task || !url) return null;
+        return {
+          id: (clean.id && typeof clean.id === 'string') ? clean.id : ('sh-' + Math.random().toString(36).slice(2, 9)),
+          task,
+          url
+        };
+      })
+      .filter(Boolean);
+  }
   
   const defaultPresets = {
     reparos: {
@@ -293,6 +376,9 @@ function normalizarEstado(raw) {
       turnos: ['Manhã', 'Tarde', 'Noite', 'Integral'],
       salas: ['Sala 1', 'Sala 2', 'Sala 3', 'Estúdio 1', 'Estúdio 2', 'Auditório'],
       disciplinas: ['Raciocínio Lógico', 'Matemática', 'Português', 'Redação', 'Biologia', 'Química', 'Física', 'História', 'Geografia', 'Inglês']
+    },
+    operacao: {
+      formasEnvio: ['WhatsApp', 'E-mail', 'Drive', 'Impresso', 'Servidor / Rede']
     },
     orcamentos: {
       fornecedores: [
@@ -309,8 +395,8 @@ function normalizarEstado(raw) {
     }
   };
 
-  ['reparos', 'professores', 'orcamentos', 'notas'].forEach(cat => {
-    obj.presets[cat] = obj.presets[cat] && typeof obj.presets[cat] === 'object' ? obj.presets[cat] : {};
+  ['reparos', 'professores', 'operacao', 'orcamentos', 'notas'].forEach(cat => {
+    obj.presets[cat] = safePlainObj(obj.presets[cat]);
     const targetCat = obj.presets[cat];
     const sourceCat = defaultPresets[cat];
     Object.keys(sourceCat).forEach(sub => {
@@ -324,34 +410,63 @@ function normalizarEstado(raw) {
     obj.presets.orcamentos.fornecedores = obj.presets.orcamentos.fornecedores
       .map(f => {
         if (typeof f === 'string') return { nome: f.trim(), link: '' };
-        if (f && typeof f === 'object') return { nome: String(f.nome || '').trim(), link: String(f.link || '').trim() };
+        if (f && typeof f === 'object' && !Array.isArray(f)) {
+          return {
+            nome: String(f.nome || '').trim(),
+            link: sanitizeOptionalLink(f.link || '')
+          };
+        }
         return null;
       })
       .filter(f => f && f.nome);
   }
 
-  obj.orc = (obj.orc && typeof obj.orc === 'object') ? obj.orc : { inst: 'Prius', modo: 'comparativo_fornecedores', titulo: '', fornecedor: '', link: '', categoria: '', unidade: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
+  const orcRaw = (obj.orc && typeof obj.orc === 'object' && !Array.isArray(obj.orc)) ? safePlainObj(obj.orc) : null;
+  obj.orc = orcRaw || { inst: 'ARGOS OPS', modo: 'comparativo_fornecedores', titulo: '', fornecedor: '', link: '', categoria: '', unidade: '', solic: '', data: hoje, obs: '', qtdTotal: '', itens: [] };
   obj.orc.modo = obj.orc.modo === 'pedido_fornecedor' ? 'pedido_fornecedor' : 'comparativo_fornecedores';
   if (typeof obj.orc.fornecedor !== 'string') obj.orc.fornecedor = '';
-  if (typeof obj.orc.link !== 'string') obj.orc.link = '';
+  obj.orc.link = typeof obj.orc.link === 'string' ? sanitizeOptionalLink(obj.orc.link) : '';
   if (typeof obj.orc.categoria !== 'string') obj.orc.categoria = '';
   if (typeof obj.orc.unidade !== 'string') obj.orc.unidade = '';
+  if (typeof obj.orc.data !== 'string' || (obj.orc.data && !/^\d{4}-\d{2}-\d{2}$/.test(obj.orc.data))) obj.orc.data = hoje;
   if (!Array.isArray(obj.orc.itens)) obj.orc.itens = [];
+  obj.orc.itens = obj.orc.itens.filter(i => i && typeof i === 'object' && !Array.isArray(i)).map(i => safePlainObj(i));
 
   obj.orc.itens.forEach(i => {
-    if (!i.status) i.status = 'Aguardando aprovação';
+    if (!i.id || typeof i.id !== 'string') i.id = uid();
+    if (!i.status || typeof i.status !== 'string') i.status = 'Aguardando aprovação';
     if (i.status === 'Pedido') i.status = 'Pedido feito';
+    if (typeof i.link === 'string') i.link = sanitizeOptionalLink(i.link);
   });
 
   obj.orcHist.forEach(h => {
+    if (!h.id || typeof h.id !== 'string') h.id = uid();
     if (h.modo !== 'pedido_fornecedor') h.modo = 'comparativo_fornecedores';
+    if (typeof h.link === 'string') h.link = sanitizeOptionalLink(h.link);
+    if (Array.isArray(h.itens)) {
+      h.itens = h.itens.filter(it => it && typeof it === 'object' && !Array.isArray(it)).map(it => {
+        const clean = safePlainObj(it);
+        if (typeof clean.link === 'string') clean.link = sanitizeOptionalLink(clean.link);
+        return clean;
+      });
+    }
+  });
+
+  obj.aulas.forEach(a => {
+    if (!a.id || typeof a.id !== 'string') a.id = uid();
+    a.destaque = (a.destaque === 'nova' || a.destaque === 'alterada') ? a.destaque : null;
   });
 
   obj.reparos.forEach(r => {
+    if (!r.id || typeof r.id !== 'string') r.id = uid();
     if (!r.status) r.status = r.feito ? 'Concluído' : 'Pendente';
     if (!r.dataReg) r.dataReg = hoje;
     if (r.status === 'Concluído' && !r.dataConc) r.dataConc = hoje;
     if (!r.local) r.local = '';
+  });
+
+  obj.lembretes.forEach(l => {
+    if (!l.id || typeof l.id !== 'string') l.id = uid();
   });
 
   return obj;
@@ -366,7 +481,7 @@ try {
     if (v1) { 
       const o = JSON.parse(v1); 
       (o.compras || []).forEach(c => { 
-        (o.orc = o.orc || { inst: 'Prius', titulo: '', solic: '', data: '', obs: '', itens: [] }).itens.push({ id: c.id, nome: c.item, qtd: c.qtd || '', forn: c.fornecedor || '', status: c.status, cat: '', un: '', preco: '' }); 
+        (o.orc = o.orc || { inst: 'ARGOS OPS', titulo: '', solic: '', data: '', obs: '', itens: [] }).itens.push({ id: c.id, nome: c.item, qtd: c.qtd || '', forn: c.fornecedor || '', status: c.status, cat: '', un: '', preco: '' }); 
       }); 
       delete o.compras; bruto = JSON.stringify(o); 
     } 
@@ -393,7 +508,7 @@ let subTabAulas = 'quadro';
 let subTabSemana = 'docs';
 let orcSlideAtivo = 0; // 0 = Slide 1 (Dados e Tabela), 1 = Slide 2 (Gráficos)
 let modoOrcamentoAtual = (S && S.orc && S.orc.modo === 'pedido_fornecedor') ? 'pedido_fornecedor' : 'comparativo_fornecedores';
-let orcHistFiltrarModo = false;
+let orcHistFiltroModo = 'todos';
 let prodFiltroHist = '';
 let cotacaoBaseComparacao = null;
 let orcFornHistorico = '';
@@ -402,12 +517,18 @@ let orcItemHistorico = '';
 let modoEntradaCronograma = 'pdf'; // 'pdf', 'texto', 'novo'
 let novaTurmaManualNome = '';
 let drawerAberto = false;
+let sheetsMenuAberto = false;
+let sheetsFormModo = '';
+let sheetsEditId = '';
+let searchFilterAberto = false;
+let notaTagSelecionada = '';
+let novaTagNotaAberta = false;
 let apelidosAberto = false;
 let resumoTextoCustomizado = null;
 let resumoTipoAtual = 'dia';
 
 let prev = null, pend = null, wk = 0, turmaPad = '', msg = '';
-let repFiltro = 'abertos', buscaAulas = '', showPast = false, buscaGlobalTermo = '', buscaGlobalTipo = 'todos';
+let repFiltro = 'abertos', showPast = false, buscaGlobalTermo = '', buscaGlobalTipo = 'todos', buscaGlobalExpandida = false;
 let dest = 'novo', nomeNovo = '', destPre = '', orcAsk = false;
 
 let toastTimer = null;
@@ -462,7 +583,7 @@ async function enviarEstadoParaNuvem() {
     if (error) {
       sbConectado = false;
       console.error('Erro ao sincronizar com Supabase:', error.message);
-      toast('⚠️ Falha ao salvar na nuvem (dados mantidos localmente).');
+      toast('⚠\uFE0E Falha ao salvar na nuvem (dados mantidos localmente).');
       return false;
     }
 
@@ -507,7 +628,7 @@ async function iniciarSupabase() {
     if (error) {
       sbConectado = false;
       console.error('Erro ao carregar dados do Supabase:', error.message);
-      toast('⚠️ Modo offline ativo (erro ao conectar à nuvem).');
+      toast('⚠\uFE0E Modo offline ativo (erro ao conectar à nuvem).');
       if (typeof render === 'function') render();
       return false;
     }
@@ -518,7 +639,8 @@ async function iniciarSupabase() {
       ((data.dados.aulas && data.dados.aulas.length > 0) ||
        (data.dados.reparos && data.dados.reparos.length > 0) ||
        (data.dados.orc && data.dados.orc.itens && data.dados.orc.itens.length > 0) ||
-       (data.dados.lembretes && data.dados.lembretes.length > 0));
+       (data.dados.lembretes && data.dados.lembretes.length > 0) ||
+       Array.isArray(data.dados.supportSheets));
 
     const localTemDados = (S.aulas && S.aulas.length > 0) ||
       (S.reparos && S.reparos.length > 0) ||
@@ -532,12 +654,12 @@ async function iniciarSupabase() {
       sbPendenciasLocais = false;
       try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
       if (typeof render === 'function') render();
-      toast('☁️ Painel sincronizado com a nuvem!');
+      toast('☁\uFE0E ARGOS OPS sincronizado com a nuvem!');
     } else if (localTemDados) {
       // Primeira migração: banco na nuvem vazio, mas este navegador já tem dados -> sobe automaticamente
       await enviarEstadoParaNuvem();
       if (typeof render === 'function') render();
-      toast('☁️ Dados locais enviados para o Supabase com sucesso!');
+      toast('☁\uFE0E Dados locais enviados para o Supabase com sucesso!');
     } else {
       S.meta = S.meta || {};
       S.meta.ultimoSyncNuvem = new Date().toISOString();
@@ -563,7 +685,7 @@ async function iniciarSupabase() {
               try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
               PriusBus.emit('sync:updated', { state: S, origem: 'realtime' });
               if (typeof render === 'function') render();
-              toast('🔄 Atualizado por outro operador!');
+              toast('↻ Atualizado por outro operador!');
             }
           }
         )
@@ -586,7 +708,7 @@ const save = () => {
     localStorage.setItem(KEY, JSON.stringify(S));
   } catch (e) {
     console.error('Falha ao salvar:', e);
-    toast('⚠️ Falha ao salvar no navegador! Armazenamento indisponível.');
+    toast('⚠\uFE0E Falha ao salvar no navegador! Armazenamento indisponível.');
   }
   PriusBus.emit('state:saved', { state: S });
   agendarSyncNuvem();
@@ -596,8 +718,31 @@ const save = () => {
 
 // Funções utilitárias
 const uid = () => Math.random().toString(36).slice(2, 9);
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const br = d => (typeof d === 'string' && d.includes('-')) ? d.split('-').reverse().slice(0, 2).join('/') : (d || '');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const br = d => (typeof d === 'string' && d.includes('-')) ? esc(d.split('-').reverse().slice(0, 2).join('/')) : esc(d || '');
+const formatarDataHoraBR = ts => {
+  if (ts == null || ts === '') return '';
+  const dt = new Date(ts);
+  if (isNaN(dt.getTime())) return '';
+  return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} às ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+};
+function touchCronograma(turma, isNew = false, ts = new Date().toISOString()) {
+  const nome = String(turma || '').trim();
+  const k = norm(nome);
+  if (!k || k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+  S.cronogramas = (S.cronogramas && typeof S.cronogramas === 'object' && !Array.isArray(S.cronogramas)) ? S.cronogramas : {};
+  const cur = Object.prototype.hasOwnProperty.call(S.cronogramas, k) ? S.cronogramas[k] : null;
+  if (cur && typeof cur === 'object') {
+    cur.nome = nome || cur.nome || '';
+    cur.updatedAt = ts;
+  } else {
+    S.cronogramas[k] = {
+      nome,
+      createdAt: isNew ? ts : '',
+      updatedAt: ts
+    };
+  }
+}
 const wd = d => {
   if (!d || typeof d !== 'string') return '';
   const dt = new Date(d + 'T12:00');
@@ -605,6 +750,14 @@ const wd = d => {
 };
 const norm = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const find = (l, id) => (S[l] || []).find(x => x.id === id);
+const getBuscaTermos = () => (typeof buscaGlobalTermo === 'string' && buscaGlobalTermo.trim())
+  ? norm(buscaGlobalTermo).split(/\s+/).filter(Boolean)
+  : [];
+const matchBusca = (corpus, termos = getBuscaTermos()) => {
+  if (!termos || !termos.length) return true;
+  const txt = norm(corpus);
+  return termos.every(t => txt.includes(t));
+};
 
 function icoSeta(tipo, size = 15) {
   const paths = {
@@ -617,7 +770,9 @@ function icoSeta(tipo, size = 15) {
     'trend-up': '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline>',
     'trend-down': '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline>'
   };
-  return `<svg class="ico-seta ico-${tipo}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[tipo] || paths.right}</svg>`;
+  const safeTipo = Object.prototype.hasOwnProperty.call(paths, tipo) ? tipo : 'right';
+  const safeSize = Math.max(8, Math.min(64, parseInt(size, 10) || 15));
+  return `<svg class="ico-seta ico-${safeTipo}" width="${safeSize}" height="${safeSize}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[safeTipo]}</svg>`;
 }
 
 // Cálculo do consumo do localStorage
@@ -691,7 +846,7 @@ function confirmarExclusao(el, acao) {
     clearTimeout(delTimer);
     delTarget = el;
     el.dataset.orig = el.innerHTML;
-    el.innerHTML = '⚠️ Confirmar?';
+    el.innerHTML = '<span class="ui-glyph" aria-hidden="true">⚠\uFE0E</span> Confirmar?';
     el.classList.add('danger');
     delTimer = setTimeout(() => {
       if (delTarget === el && el.isConnected) {

@@ -5,27 +5,32 @@
 
 const PRESET_SCHEMA = {
   reparos: [
-    { key: 'locais', label: '📍 Locais / Ambientes', placeholder: 'Novo local / ambiente...' },
-    { key: 'categorias', label: '🛠️ Categorias de Problema', placeholder: 'Nova categoria de problema...' },
-    { key: 'prestadores', label: '👷 Prestadores / Técnicos', placeholder: 'Novo prestador ou técnico...' }
+    { key: 'locais', label: 'Locais / Ambientes', placeholder: 'Novo local / ambiente...' },
+    { key: 'categorias', label: 'Categorias de Problema', placeholder: 'Nova categoria de problema...' },
+    { key: 'prestadores', label: 'Prestadores / Técnicos', placeholder: 'Novo prestador ou técnico...' }
   ],
-  professores: [
-    { key: 'turnos', label: '⏰ Turnos', placeholder: 'Novo turno (ex: Manhã, Sábado)...' },
-    { key: 'salas', label: '🚪 Salas de Aula / Turmas', placeholder: 'Nova sala ou turma padrão...' },
-    { key: 'disciplinas', label: '📚 Disciplinas / Áreas', placeholder: 'Nova disciplina / área de atuação...' }
+  operacao: [
+    { key: 'formasEnvio', label: 'Formas de Envio de Material', placeholder: 'Nova forma de envio (ex: Portal, Pendrive)...' }
   ],
   orcamentos: [
-    { key: 'fornecedores', label: '🏢 Fornecedores Favoritos', placeholder: 'Nome do fornecedor favorito...' },
-    { key: 'categorias', label: '🏷️ Categorias / Centros de Custo', placeholder: 'Nova categoria / centro de custo...' },
-    { key: 'unidades', label: '📏 Unidades de Medida', placeholder: 'Nova unidade (ex: un, cx, pct, kg)...' }
+    { key: 'fornecedores', label: 'Fornecedores Favoritos', placeholder: 'Nome do fornecedor favorito...' },
+    { key: 'categorias', label: 'Categorias / Centros de Custo', placeholder: 'Nova categoria / centro de custo...' },
+    { key: 'unidades', label: 'Unidades de Medida', placeholder: 'Nova unidade (ex: un, cx, pct, kg)...' }
   ],
   notas: [
-    { key: 'etiquetas', label: '🏷️ Etiquetas / Tags', placeholder: 'Nova etiqueta / tag...' }
+    { key: 'etiquetas', label: 'Etiquetas / Tags', placeholder: 'Nova etiqueta / tag...' }
   ]
 };
 
+const PROF_PRESET_SCHEMA = [
+  { key: 'disciplinas', label: 'Disciplinas / Áreas', placeholder: 'Nova disciplina / área de atuação...' },
+  { key: 'turnos', label: 'Turnos', placeholder: 'Novo turno (ex: Manhã, Sábado)...' },
+  { key: 'salas', label: 'Salas de Aula / Turmas', placeholder: 'Nova sala ou turma padrão...' }
+];
+
 let presetTabAtual = 'reparos';
 let presetSubAtual = 'locais';
+let profPresetSubAtual = 'disciplinas';
 
 function getPresets() {
   S.presets = S.presets && typeof S.presets === 'object' ? S.presets : {};
@@ -46,6 +51,15 @@ function resolverTabSubPreset(catInicial = 'reparos', subInicial = '') {
   if (cat === 'orcamentos_fornecedores') {
     cat = 'orcamentos';
     sub = 'fornecedores';
+  }
+  if (cat === 'controle') {
+    cat = 'operacao';
+  }
+  if (cat === 'professores') {
+    if (!sub || !PROF_PRESET_SCHEMA.some(s => s.key === sub)) {
+      sub = PROF_PRESET_SCHEMA[0].key;
+    }
+    return { cat, sub };
   }
   if (!PRESET_SCHEMA[cat]) cat = 'reparos';
   const subs = PRESET_SCHEMA[cat];
@@ -89,7 +103,12 @@ function adicionarPreset(categoria, subcategoria, itemValor, extraLink = '') {
   }
 
   if (categoria === 'orcamentos' && subcategoria === 'fornecedores') {
-    const linkLimpo = (extraLink || '').trim();
+    const linkBruto = (extraLink || '').trim();
+    const linkLimpo = linkBruto ? (typeof safeHttpUrl === 'function' ? safeHttpUrl(linkBruto) : '') : '';
+    if (linkBruto && !linkLimpo) {
+      toast('URL inválida. Informe um link http:// ou https:// válido.');
+      return false;
+    }
     if (lista.some(x => (typeof x === 'object' ? norm(x.nome) : norm(x)) === norm(nomeLimpo))) {
       toast('Este fornecedor já existe na lista.');
       return false;
@@ -108,6 +127,7 @@ function adicionarPreset(categoria, subcategoria, itemValor, extraLink = '') {
 
   save();
   renderModalPresets();
+  if (typeof renderModalSystemSettings === 'function') renderModalSystemSettings();
   if (typeof render === 'function') render();
   toast('Opção adicionada com sucesso!');
   return true;
@@ -129,6 +149,7 @@ function removerPreset(categoria, subcategoria, indexOrName) {
 
   save();
   renderModalPresets();
+  if (typeof renderModalSystemSettings === 'function') renderModalSystemSettings();
   if (typeof render === 'function') render();
   toast('Opção removida.');
   return true;
@@ -183,15 +204,15 @@ function renderModalPresets() {
     html += `
       <div class="preset-sub-group ${ehAtiva ? 'active-sub' : ''}" data-sub-group="${esc(sub.key)}">
         <div class="preset-sub-header" data-act="preset_select_sub" data-sub="${esc(sub.key)}" title="Clique para selecionar esta subcategoria ao adicionar">
-          <span class="preset-sub-title">${sub.label} (${itens.length})${ehAtiva ? ' <span class="pill o" style="font-size:10px; padding:1px 6px; margin-left:4px;">Selecionada</span>' : ''}</span>
+          <span class="preset-sub-title">${esc(sub.label)} (${itens.length})${ehAtiva ? ' <span class="pill o" style="font-size:10px; padding:1px 6px; margin-left:4px;">Selecionada</span>' : ''}</span>
           <span class="mu" style="font-size: 11px; font-weight:normal;">Clique no × para remover</span>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">
           ${itens.map(item => {
             const val = typeof item === 'string' ? item : (item && item.nome ? item.nome : '');
             const linkStr = (item && typeof item === 'object' && item.link) ? item.link.trim() : '';
-            const hrefSeguro = linkStr ? (/^https?:\/\//i.test(linkStr) ? linkStr : 'https://' + linkStr) : '';
-            const linkTag = hrefSeguro ? ` <a href="${esc(hrefSeguro)}" target="_blank" rel="noopener noreferrer" title="${esc(linkStr)}" style="color:var(--ac); font-size:11px; text-decoration:none;">🔗</a>` : '';
+            const hrefSeguro = linkStr ? (typeof safeHttpUrl === 'function' ? safeHttpUrl(linkStr) : '') : '';
+            const linkTag = hrefSeguro ? ` <a href="${esc(hrefSeguro)}" target="_blank" rel="noopener noreferrer" title="${esc(hrefSeguro)}" class="ui-glyph" style="color:var(--ac); font-size:11px; text-decoration:none;">↗</a>` : '';
             return `
               <div class="preset-chip">
                 <span>${esc(val)}${linkTag}</span>
@@ -209,6 +230,25 @@ function renderModalPresets() {
 
 function abrirModalPresets(catInicial = 'reparos', subInicial = '') {
   const { cat, sub } = resolverTabSubPreset(catInicial, subInicial);
+
+  if (cat === 'professores') {
+    profPresetSubAtual = sub;
+    if (typeof abrirModalConfig === 'function') {
+      abrirModalConfig('professores');
+    } else {
+      const modalFallback = document.getElementById('modalSystemSettings');
+      if (modalFallback) modalFallback.style.display = 'flex';
+    }
+    setTimeout(() => {
+      const inp = document.getElementById('profPresetInputNome');
+      if (inp) {
+        if (typeof inp.scrollIntoView === 'function') inp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        inp.focus();
+      }
+    }, 40);
+    return;
+  }
+
   presetTabAtual = cat;
   presetSubAtual = sub;
 
@@ -242,9 +282,9 @@ function fecharModalPresets() {
   if (modal) modal.style.display = 'none';
 }
 
-// Botão discreto rápido (+ / ⚙️) ao lado de selects e campos de predefinições
-function presetGearBtn(cat, sub, label = '⚙️', title = 'Gerenciar predefinições') {
-  return `<button type="button" class="b preset-quick-btn" data-act="abrir_presets_sub" data-cat="${esc(cat)}" data-sub="${esc(sub)}" title="${esc(title)}" aria-label="${esc(title)}">${label}</button>`;
+// Botão discreto rápido (+ / ⚙︎) ao lado de selects e campos de predefinições
+function presetGearBtn(cat, sub, label = '\u2699\uFE0E', title = 'Gerenciar predefinições') {
+  return `<button type="button" class="b preset-quick-btn" data-act="abrir_presets_sub" data-cat="${esc(cat)}" data-sub="${esc(sub)}" title="${esc(title)}" aria-label="${esc(title)}"><span class="ui-glyph" aria-hidden="true">${label}</span></button>`;
 }
 
 if (typeof PriusBus !== 'undefined') {

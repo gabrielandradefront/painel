@@ -1,16 +1,15 @@
 /* ========================================================
    ORCAMENTO.JS - COTAÇÕES, COMPARAÇÃO E HISTÓRICO
-   Painel Operacional Prius
+   ARGOS OPS
 ======================================================== */
 
 // Utilitário para limpar parâmetros de rastreamento e encurtar URLs
 async function encurtarUrlAmigavel(urlBruta) {
-  let url = (urlBruta || '').trim();
-  if (!url) return '';
-  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  const urlSegura = typeof safeHttpUrl === 'function' ? safeHttpUrl(urlBruta) : '';
+  if (!urlSegura) return '';
 
   try {
-    const u = new URL(url);
+    const u = new URL(urlSegura);
     const paramsParaRemover = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'ref', 'source', 'tracking_id'];
     paramsParaRemover.forEach(p => u.searchParams.delete(p));
     const urlLimpa = u.toString();
@@ -25,24 +24,27 @@ async function encurtarUrlAmigavel(urlBruta) {
 
     if (resp.ok) {
       const data = await resp.json();
-      if (data && data.shorturl) return data.shorturl;
+      const shortSafe = data && data.shorturl && typeof safeHttpUrl === 'function' ? safeHttpUrl(data.shorturl) : '';
+      if (shortSafe) return shortSafe;
     }
   } catch (err) {}
 
   try {
-    const u = new URL(url);
+    const u = new URL(urlSegura);
     const paramsParaRemover = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'ref'];
     paramsParaRemover.forEach(p => u.searchParams.delete(p));
     return u.toString();
   } catch (e) {
-    return url;
+    return urlSegura;
   }
 }
 
 function extrairDominio(link) {
   if (!link) return '';
   try {
-    const u = new URL(/^https?:\/\//i.test(link) ? link : 'https://' + link);
+    const safe = typeof safeHttpUrl === 'function' ? safeHttpUrl(link) : '';
+    if (!safe) return 'link';
+    const u = new URL(safe);
     return u.hostname.replace(/^www\./i, '');
   } catch (e) {
     return 'link';
@@ -112,7 +114,7 @@ function orcBadgeComparacaoHtml(i, modo = orcModo(), qtdTotal = num(S.orc.qtdTot
 
   const mapa = cotacaoBaseComparacao.itens || {};
   if (!Object.prototype.hasOwnProperty.call(mapa, chave)) {
-    return '<span class="orc-cmp-badge novo">🆕 novo</span>';
+    return '<span class="orc-cmp-badge novo">▪ novo</span>';
   }
 
   const valorAnt = num(mapa[chave]);
@@ -143,7 +145,7 @@ function orcResumoComparacaoInnerHtml(modo = orcModo()) {
 
   return `
     <div class="orc-cmp-summary-text">
-      <span>📊 Pedido anterior (<b>${br(cotacaoBaseComparacao.data)}</b>): <b>${brl(baseTotal)}</b></span>
+      <span><span class="ui-glyph" aria-hidden="true">▤</span> Pedido anterior (<b>${br(cotacaoBaseComparacao.data)}</b>): <b>${brl(baseTotal)}</b></span>
       <span class="orc-cmp-arrow">→</span>
       <span>Atual: <b>${brl(atualTotal)}</b></span>
       <span class="orc-cmp-sep">|</span>
@@ -427,7 +429,7 @@ function orcFooterHistoricoFornecedorHtml(fornecedorNome, permiteFechar = false)
     <div id="orcRechartsCard" class="card orc-recharts-card">
       <div class="orc-recharts-header">
         <div>
-          <h2 style="margin-bottom:2px;">📈 Histórico de Preços — ${esc(forn)}</h2>
+          <h2 style="margin-bottom:2px;">Histórico de Preços — ${esc(forn)}</h2>
           <div class="mu" style="font-size:12px;">Variação de preço unitário de itens recorrentes nas últimas cotações</div>
         </div>
         <div class="orc-recharts-controls">
@@ -507,7 +509,7 @@ async function orcXlsx() {
     const catTxt = (S.orc.categoria || '').trim();
     const totalPedido = orcTotalReferencia(S.orc);
     if (typeof window.ExcelJS === 'undefined') {
-      let csv = '\uFEFFItem;Quantidade;Unidade;Valor Unitário;Subtotal\n';
+      let csv = '\uFEFFARGOS OPS — PEDIDO DE COMPRA\n\nItem;Quantidade;Unidade;Valor Unitário;Subtotal\n';
       itens.forEach(i => {
         const q = orcItemQtd(i);
         const un = (i.un || 'un').trim();
@@ -606,7 +608,7 @@ async function orcXlsx() {
   const menorValor = totaisPositivos.length ? Math.min(...totaisPositivos) : (ordenados.length ? itemTotal(ordenados[0]) : 0);
 
   if (typeof window.ExcelJS === 'undefined') {
-    let csv = '\uFEFFPosição;Fornecedor;Valor Sem Frete;Frete;Valor Total;Valor Unitário;Status;Link de Compra\n';
+    let csv = '\uFEFFARGOS OPS — MAPA COMPARATIVO DE COTAÇÃO\n\nPosição;Fornecedor;Valor Sem Frete;Frete;Valor Total;Valor Unitário;Status;Link de Compra\n';
     ordenados.forEach((i, idx) => {
       const vTot = itemTotal(i);
       const vUnd = (i.valorUnd !== undefined && i.valorUnd !== '') ? num(i.valorUnd) : (qtdTotal > 0 ? (itemPrecoSemFrete(i) / qtdTotal) : 0);
@@ -719,7 +721,7 @@ async function orcXlsx() {
       },
       {
         rangeLabel: 'C4:D4', rangeVal: 'C5:D5',
-        label: '🏆 MELHOR OFERTA (TOTAL)',
+        label: '★ MELHOR OFERTA (TOTAL)',
         formula: `MIN(E${firstDataRow}:E${lastDataRow})`,
         result: menorValor,
         numFmt: '"R$ "#,##0.00',
@@ -842,7 +844,7 @@ async function orcXlsx() {
 
       // 1. Posição
       const cPos = row.getCell(1);
-      cPos.value = ehMenor ? `🏆 ${idx + 1}º` : `${idx + 1}º`;
+      cPos.value = ehMenor ? `★ ${idx + 1}º` : `${idx + 1}º`;
       cPos.alignment = { vertical: 'middle', horizontal: 'center' };
       cPos.font = { name: FONT_NAME, size: 10.5, bold: ehMenor, color: { argb: ehMenor ? C_EMERALD_TX : C_MUTED } };
 
@@ -917,10 +919,9 @@ async function orcXlsx() {
 
       // 9. Link de Compra / Observação
       const cLink = row.getCell(9);
-      const isUrl = /^(https?:\/\/|www\.)/i.test(urlCompra) || (dom && dom !== 'link' && urlCompra.includes('.'));
-      if (urlCompra && isUrl) {
-        const fullUrl = /^https?:\/\//i.test(urlCompra) ? urlCompra : 'https://' + urlCompra;
-        const label = dom ? `🔗 ${dom}` : urlCompra;
+      const fullUrl = typeof safeHttpUrl === 'function' ? safeHttpUrl(urlCompra) : '';
+      if (urlCompra && fullUrl) {
+        const label = dom ? `↗ ${dom}` : urlCompra;
         cLink.value = { text: label, hyperlink: fullUrl };
         cLink.font = { name: FONT_NAME, size: 10, underline: true, color: { argb: 'FF2563EB' } };
         colWidths[8] = Math.max(colWidths[8], Math.min(48, label.length + 5));
@@ -982,7 +983,7 @@ async function orcXlsx() {
     const minRow = ws.getRow(minRowIdx);
     minRow.height = 25;
     ws.mergeCells(`A${minRowIdx}:B${minRowIdx}`);
-    minRow.getCell(1).value = '🏆 MENOR VALOR ENCONTRADO';
+    minRow.getCell(1).value = '★ MENOR VALOR ENCONTRADO';
     minRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'right' };
 
     minRow.getCell(3).value = { formula: `MIN(C${firstDataRow}:C${lastDataRow})`, result: Math.min(...ordenados.map(itemPrecoSemFrete)) };
@@ -1112,10 +1113,10 @@ function orcCopy() {
 
   if (modo === 'pedido_fornecedor') {
     const forn = S.orc.fornecedor || 'Fornecedor';
-    let txt = `*PEDIDO DE COMPRA — ${forn}${S.orc.titulo ? ' (' + S.orc.titulo + ')' : ''} — ${br(S.orc.data || hoje)}*\n`;
-    if (S.orc.categoria) txt += `🏷️ Categoria: ${S.orc.categoria}\n`;
-    if (S.orc.link) txt += `🔗 Link: ${S.orc.link}\n`;
-    if (S.orc.obs) txt += `📝 Obs: ${S.orc.obs}\n`;
+    let txt = `*ARGOS OPS • PEDIDO DE COMPRA — ${forn}${S.orc.titulo ? ' (' + S.orc.titulo + ')' : ''} — ${br(S.orc.data || hoje)}*\n`;
+    if (S.orc.categoria) txt += `▪ Categoria: ${S.orc.categoria}\n`;
+    if (S.orc.link) txt += `↗ Link: ${S.orc.link}\n`;
+    if (S.orc.obs) txt += `▪ Obs: ${S.orc.obs}\n`;
     txt += '\n';
     itens.forEach((i, idx) => {
       const q = orcItemQtd(i);
@@ -1123,14 +1124,14 @@ function orcCopy() {
       const vu = num(i.valorUnd);
       txt += `${idx + 1}. *${i.nome || 'Item'}* — ${q} ${un} x ${brl(vu)} = *${brl(q * vu)}*\n`;
     });
-    txt += `\n💰 *Valor Total do Pedido:* ${brl(orcTotalReferencia(S.orc))}`;
+    txt += `\n*Valor Total do Pedido:* ${brl(orcTotalReferencia(S.orc))}`;
     copy(txt);
     return;
   }
 
-  let txt = `*COTAÇÃO - ${S.orc.titulo || 'ARGOS OPS'} (${br(S.orc.data || hoje)})*\n`;
-  if (S.orc.categoria) txt += `🏷️ Categoria: ${S.orc.categoria}\n`;
-  if (S.orc.qtdTotal) txt += `📏 Quantidade: ${S.orc.qtdTotal}${S.orc.unidade ? ' ' + S.orc.unidade : ''}\n`;
+  let txt = `*ARGOS OPS • COTAÇÃO - ${S.orc.titulo || 'Cotação'} (${br(S.orc.data || hoje)})*\n`;
+  if (S.orc.categoria) txt += `▪ Categoria: ${S.orc.categoria}\n`;
+  if (S.orc.qtdTotal) txt += `▪ Quantidade: ${S.orc.qtdTotal}${S.orc.unidade ? ' ' + S.orc.unidade : ''}\n`;
   txt += '\n';
   itens.forEach((i, idx) => {
     txt += `${idx + 1}. *${i.forn || 'Fornecedor'}*\n`;
@@ -1147,11 +1148,11 @@ function renderSwitchModoOrcamento(modo = orcModo()) {
   return `
     <div class="orc-mode-switcher" role="tablist" aria-label="Tipo de cotação">
       <button type="button" class="orc-mode-btn ${!ehPedido ? 'active' : ''}" data-act="orc_set_modo" data-modo="comparativo_fornecedores" role="tab" aria-selected="${!ehPedido}">
-        <span class="orc-mode-title">🏢 1 Item • Vários Fornecedores</span>
+        <span class="orc-mode-title">1 Item • Vários Fornecedores</span>
         <span class="orc-mode-sub">Comparar o mesmo item entre fornecedores e destacar o menor preço</span>
       </button>
       <button type="button" class="orc-mode-btn ${ehPedido ? 'active' : ''}" data-act="orc_set_modo" data-modo="pedido_fornecedor" role="tab" aria-selected="${ehPedido}">
-        <span class="orc-mode-title">📦 Vários Itens • 1 Fornecedor</span>
+        <span class="orc-mode-title">Vários Itens • 1 Fornecedor</span>
         <span class="orc-mode-sub">Montar lista de compras com vários itens, quantidades e soma do pedido</span>
       </button>
     </div>
@@ -1162,6 +1163,7 @@ function viewOrc() {
   const modo = orcModo();
   modoOrcamentoAtual = modo;
   const ehPedido = modo === 'pedido_fornecedor';
+  const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
   const itens = S.orc.itens || [];
   const menorValor = !ehPedido && itens.length ? Math.min(...itens.map(itemTotal)) : 0;
   const maiorValor = itens.length ? Math.max(...itens.map(i => orcItemSubtotal(i, modo))) : 0;
@@ -1172,8 +1174,8 @@ function viewOrc() {
   const slideControls = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
       <div style="display:flex; gap:6px;">
-        <button class="b ${orcSlideAtivo === 0 ? 'p' : ''}" data-act="orc_ir_slide" data-s="0">📋 Tabela de Cotação</button>
-        <button class="b ${orcSlideAtivo === 1 ? 'p' : ''}" data-act="orc_ir_slide" data-s="1">📈 Comparativo & Histórico</button>
+        <button class="b ${orcSlideAtivo === 0 ? 'p' : ''}" data-act="orc_ir_slide" data-s="0">Tabela de Cotação</button>
+        <button class="b ${orcSlideAtivo === 1 ? 'p' : ''}" data-act="orc_ir_slide" data-s="1">Comparativo & Histórico</button>
       </div>
       <div class="slide-nav-group">
         <button class="b arrow-icon-btn nav-prev" data-act="orc_passar_slide" data-dir="-1" ${orcSlideAtivo === 0 ? 'disabled' : ''} title="Tela anterior (Slide 1)" aria-label="Slide anterior">
@@ -1205,7 +1207,7 @@ function viewOrc() {
         const val = typeof v === 'string' ? v : (v && v.nome ? v.nome : '');
         return `<option value="${esc(val)}" ${norm(val) === norm(sel) ? 'selected' : ''}>${esc(val)}</option>`;
       }).join('');
-  const orcGear = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('orcamentos', sub, '⚙️', title) : '';
+  const orcGear = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('orcamentos', sub, '\u2699\uFE0E', title) : '';
   const datalistFornecedores = `
     <datalist id="listaFornecedoresFavoritos">
       ${favFornecedores.map(f => {
@@ -1220,34 +1222,39 @@ function viewOrc() {
   if (ehPedido) {
     // --- MODO: VÁRIOS ITENS • 1 FORNECEDOR ---
     const linkFornecedor = (S.orc.link || '').trim();
-    const domFornecedor = extrairDominio(linkFornecedor);
+    const linkFornecedorSeguro = typeof safeHttpUrl === 'function' ? safeHttpUrl(linkFornecedor) : '';
+    const domFornecedor = extrairDominio(linkFornecedorSeguro);
     const unPadraoForm = unOrcList.includes('un') ? 'un' : (unOrcList[0] || 'un');
+    const itensExibidos = termosBusca.length
+      ? itens.filter(i => matchBusca(`${i.nome || ''} ${i.un || ''} ${i.status || ''} ${S.orc.fornecedor || ''} ${S.orc.titulo || ''} ${S.orc.categoria || ''}`, termosBusca))
+      : itens;
 
-    const linhasPedido = itens.map(i => {
+    const linhasPedido = itensExibidos.map(i => {
       const sub = orcItemSubtotal(i, modo);
       const cmpHtml = orcBadgeComparacaoHtml(i, modo, qtdTotal);
+      const idEsc = esc(i.id);
       return `
         <tr style="border-bottom:1px solid var(--bd);">
           <td style="padding:10px 8px; min-width:210px;">
-            <input class="obs" style="margin:0; width:100%;" data-act="orcf" data-id="${i.id}" data-f="nome" value="${esc(i.nome || '')}" placeholder="Nome do item">
-            <div id="ocmp-${i.id}" class="orc-cmp-slot">${cmpHtml}</div>
+            <input class="obs" style="margin:0; width:100%;" data-act="orcf" data-id="${idEsc}" data-f="nome" value="${esc(i.nome || '')}" placeholder="Nome do item">
+            <div id="ocmp-${idEsc}" class="orc-cmp-slot">${cmpHtml}</div>
           </td>
           <td style="padding:10px 8px; width:100px;">
-            <input class="obs" style="margin:0; width:82px; text-align:right;" data-act="orcf" data-id="${i.id}" data-f="qtd" value="${esc(i.qtd ?? '1')}" placeholder="1">
+            <input class="obs" style="margin:0; width:82px; text-align:right;" data-act="orcf" data-id="${idEsc}" data-f="qtd" value="${esc(i.qtd ?? '1')}" placeholder="1">
           </td>
           <td style="padding:10px 8px; width:100px;">
-            <select class="obs" style="margin:0; width:88px; padding:4px 6px;" data-act="orcf_sel" data-id="${i.id}" data-f="un" title="Unidade de medida">
+            <select class="obs" style="margin:0; width:88px; padding:4px 6px;" data-act="orcf_sel" data-id="${idEsc}" data-f="un" title="Unidade de medida">
               ${optPreset(unOrcList, i.un || 'un', 'Unid.', false)}
             </select>
           </td>
           <td style="padding:10px 8px; width:130px;">
-            <input class="obs" style="margin:0; width:110px; text-align:right;" data-act="orcf" data-id="${i.id}" data-f="valorUnd" value="${esc(i.valorUnd ?? '')}" placeholder="0,00">
+            <input class="obs" style="margin:0; width:110px; text-align:right;" data-act="orcf" data-id="${idEsc}" data-f="valorUnd" value="${esc(i.valorUnd ?? '')}" placeholder="0,00">
           </td>
-          <td style="padding:10px 8px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums;" id="os-${i.id}">
+          <td style="padding:10px 8px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums;" id="os-${idEsc}">
             ${brl(sub)}
           </td>
           <td style="padding:10px 8px; text-align:right; width:56px;">
-            <button class="b danger" data-act="del_orcitem" data-id="${i.id}" style="font-size:11px; padding:3px 7px;" title="Remover item">✕</button>
+            <button class="b danger" data-act="del_orcitem" data-id="${idEsc}" style="font-size:11px; padding:3px 7px;" title="Remover item">✕</button>
           </td>
         </tr>
       `;
@@ -1259,63 +1266,96 @@ function viewOrc() {
         <div class="card" style="margin-bottom:14px;">
           <h2>Tipo e Dados do Pedido</h2>
           ${seletorModoHtml}
-          <div class="fx" style="gap:10px; margin-top:12px;">
-            <div class="preset-field-wrap" style="flex:1.5 1 195px;">
-              <select id="orcFornecedorPresetSelect" style="flex:1;" title="Selecionar Fornecedor Favorito (preenche nome e link automaticamente)" aria-label="Fornecedor Favorito">
-                <option value="">⚡ Fornecedor favorito...</option>
-                ${favFornecedores.map((f, idx) => {
-                  const nomeF = typeof f === 'string' ? f : (f && f.nome ? f.nome : '');
-                  const linkF = (f && typeof f === 'object' && f.link) ? f.link : '';
-                  const sel = norm(S.orc.fornecedor || '') === norm(nomeF);
-                  return `<option value="${idx}" ${sel ? 'selected' : ''}>${esc(nomeF)}${linkF ? ' 🔗' : ''}</option>`;
-                }).join('')}
-              </select>
-              ${orcGear('fornecedores', 'Gerenciar Fornecedores Favoritos')}
+          <div class="orc-header-grid" style="margin-top:14px;">
+            <div class="field-group">
+              <label class="field-label" for="orcFornecedorPresetSelect">Fornecedor Favorito</label>
+              <div class="preset-field-wrap">
+                <select id="orcFornecedorPresetSelect" title="Selecionar Fornecedor Favorito (preenche nome e link automaticamente)" aria-label="Fornecedor Favorito">
+                  <option value="">Fornecedor favorito...</option>
+                  ${favFornecedores.map((f, idx) => {
+                    const nomeF = typeof f === 'string' ? f : (f && f.nome ? f.nome : '');
+                    const linkF = (f && typeof f === 'object' && f.link) ? f.link : '';
+                    const sel = norm(S.orc.fornecedor || '') === norm(nomeF);
+                    return `<option value="${idx}" ${sel ? 'selected' : ''}>${esc(nomeF)}${linkF ? ' ↗' : ''}</option>`;
+                  }).join('')}
+                </select>
+                ${orcGear('fornecedores', 'Gerenciar Fornecedores Favoritos')}
+              </div>
             </div>
-            <input data-orc="fornecedor" list="listaFornecedoresFavoritos" placeholder="Nome do Fornecedor / Loja (ex: Kalunga, Amazon)" value="${esc(S.orc.fornecedor || '')}" style="flex:2 1 210px;">
-            <input data-orc="titulo" placeholder="Referência / Título do Pedido (ex: Material de Escritório)" value="${esc(S.orc.titulo || '')}" style="flex:2 1 190px;">
-            <div class="preset-field-wrap" style="flex:1.4 1 175px;">
-              <select data-orc="categoria" style="flex:1;" aria-label="Categoria ou Centro de Custo" title="Categoria / Centro de Custo">
-                ${optPreset(catOrcList, S.orc.categoria || '', 'Categoria / Centro de Custo...', true)}
-              </select>
-              ${orcGear('categorias', 'Gerenciar Categorias / Centros de Custo')}
+            <div class="field-group">
+              <label class="field-label">Fornecedor / Loja</label>
+              <input data-orc="fornecedor" list="listaFornecedoresFavoritos" placeholder="Ex: Kalunga, Amazon" value="${esc(S.orc.fornecedor || '')}">
             </div>
-            <input data-orc="data" type="date" value="${S.orc.data || hoje}" style="flex:1 1 135px;">
-          </div>
-          <div class="fx" style="gap:10px; margin-top:10px; align-items:center;">
-            <div class="input-link-wrapper" style="flex:3 1 260px;">
-              <input id="orc_linkFornecedor" data-orc="link" placeholder="Link de compra do fornecedor / carrinho (URL)" value="${esc(linkFornecedor)}" style="flex:1;">
-              <button type="button" class="b" data-act="encurtar_link_pedido" title="Encurta o link e limpa parâmetros de rastreio" style="font-size:11.5px; padding:4px 9px;">✂️ Encurtar</button>
-              ${linkFornecedor ? `<a href="${esc(/^https?:\/\//i.test(linkFornecedor) ? linkFornecedor : 'https://' + linkFornecedor)}" target="_blank" rel="noopener noreferrer" class="btn-link-produto" title="${esc(linkFornecedor)}">🔗 ${esc(domFornecedor)}</a>` : ''}
+            <div class="field-group">
+              <label class="field-label">Título / Referência</label>
+              <input data-orc="titulo" placeholder="Ex: Material de Escritório" value="${esc(S.orc.titulo || '')}">
             </div>
-            <input data-orc="obs" placeholder="Observação (prazo, frete, forma de pagamento...)" value="${esc(S.orc.obs || '')}" style="flex:2 1 200px;">
+            <div class="field-group">
+              <label class="field-label">Categoria / Centro de Custo</label>
+              <div class="preset-field-wrap">
+                <select data-orc="categoria" aria-label="Categoria ou Centro de Custo" title="Categoria / Centro de Custo">
+                  ${optPreset(catOrcList, S.orc.categoria || '', 'Categoria / Centro de Custo...', true)}
+                </select>
+                ${orcGear('categorias', 'Gerenciar Categorias / Centros de Custo')}
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Data</label>
+              <input data-orc="data" type="date" value="${esc(S.orc.data || hoje)}">
+            </div>
+            <div class="field-group span-2-desktop">
+              <label class="field-label" for="orc_linkFornecedor">Link de compra do fornecedor / carrinho</label>
+              <div class="input-link-wrapper">
+                <input id="orc_linkFornecedor" data-orc="link" placeholder="URL do carrinho ou loja" value="${esc(linkFornecedor)}">
+                <button type="button" class="b" data-act="encurtar_link_pedido" title="Encurta o link e limpa parâmetros de rastreio" style="font-size:11.5px; padding:4px 9px;"><span class="ui-glyph" aria-hidden="true">✂\uFE0E</span> Encurtar</button>
+                ${linkFornecedorSeguro ? `<a href="${esc(linkFornecedorSeguro)}" target="_blank" rel="noopener noreferrer" class="btn-link-produto" title="${esc(linkFornecedorSeguro)}"><span class="ui-glyph" aria-hidden="true">↗</span> ${esc(domFornecedor)}</a>` : ''}
+              </div>
+            </div>
+            <div class="field-group span-2-desktop">
+              <label class="field-label">Observação</label>
+              <input data-orc="obs" placeholder="Prazo, frete, forma de pagamento..." value="${esc(S.orc.obs || '')}">
+            </div>
           </div>
         </div>
 
         <div class="card" style="margin-bottom:14px;">
           <h2>Adicionar Item ao Pedido</h2>
-          <form data-form="orc_pedido_item" id="formNovoItemPedido">
-            <input name="nome" id="ped_nomeItem" placeholder="Nome do item (ex: Resma A4, Marcador Quadro, Pilha AA)" required style="flex:3 1 220px;">
-            <input name="qtd" id="ped_qtdItem" placeholder="Qtd." value="1" required style="flex:1 1 80px;">
-            <div class="preset-field-wrap" style="flex:1 1 115px;">
-              <select name="un" id="ped_unItem" style="flex:1;" aria-label="Unidade de medida" title="Unidade de Medida">
-                ${optPreset(unOrcList, unPadraoForm, 'Unid.', false)}
-              </select>
-              ${orcGear('unidades', 'Gerenciar Unidades de Medida')}
+          <form data-form="orc_pedido_item" id="formNovoItemPedido" class="form-grid-compact" style="margin-bottom:0;">
+            <div class="field-group span-2-desktop">
+              <label class="field-label" for="ped_nomeItem">Nome do item *</label>
+              <input name="nome" id="ped_nomeItem" placeholder="Ex: Resma A4, Marcador Quadro, Pilha AA" required>
             </div>
-            <input name="valorUnd" id="ped_valorUnd" placeholder="Valor Unitário (R$)" required style="flex:1 1 130px;">
-            <button class="b p" style="white-space:nowrap;">➕ Adicionar item</button>
+            <div class="field-group">
+              <label class="field-label" for="ped_qtdItem">Quantidade *</label>
+              <input name="qtd" id="ped_qtdItem" placeholder="Qtd." value="1" required>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="ped_unItem">Unidade</label>
+              <div class="preset-field-wrap">
+                <select name="un" id="ped_unItem" aria-label="Unidade de medida" title="Unidade de Medida">
+                  ${optPreset(unOrcList, unPadraoForm, 'Unid.', false)}
+                </select>
+                ${orcGear('unidades', 'Gerenciar Unidades de Medida')}
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="ped_valorUnd">Valor Unitário (R$) *</label>
+              <input name="valorUnd" id="ped_valorUnd" placeholder="0,00" required>
+            </div>
+            <div class="form-actions-cell">
+              <button class="b p" style="white-space:nowrap;">+ Adicionar item</button>
+            </div>
           </form>
         </div>
 
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <h2>Itens do Pedido (${itens.length})</h2>
+            <h2>Itens do Pedido (${termosBusca.length ? `${itensExibidos.length} de ${itens.length}` : itens.length})</h2>
             <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button class="b" data-act="orccopy">📋 Copiar Pedido</button>
-              <button class="b" data-act="orcxlsx" title="Exportar lista do pedido em planilha Excel (.xlsx)">📥 Exportar Planilha</button>
-              <button class="b p" data-act="orcsalvarhist">💾 Arquivar no Histórico</button>
-              <button class="b danger" data-act="orcnovo">🧹 Limpar</button>
+              <button class="b" data-act="orccopy"><span class="ui-glyph" aria-hidden="true">≡</span> Copiar Pedido</button>
+              <button class="b" data-act="orcxlsx" title="Exportar lista do pedido em planilha Excel (.xlsx)"><span class="ui-glyph" aria-hidden="true">⇩</span> Exportar Planilha</button>
+              <button class="b p" data-act="orcsalvarhist"><span class="ui-glyph" aria-hidden="true">⇩</span> Arquivar no Histórico</button>
+              <button class="b danger" data-act="orcnovo"><span class="ui-glyph" aria-hidden="true">✕</span> Limpar</button>
             </div>
           </div>
 
@@ -1332,7 +1372,9 @@ function viewOrc() {
                 </tr>
               </thead>
               <tbody>
-                ${linhasPedido || '<tr><td colspan="6" class="empty">Nenhum item adicionado ao pedido ainda. Use o formulário acima para começar.</td></tr>'}
+                ${linhasPedido || (termosBusca.length && itens.length
+                  ? '<tr><td colspan="6" class="empty">Nenhum item encontrado neste filtro.</td></tr>'
+                  : '<tr><td colspan="6" class="empty">Nenhum item adicionado ao pedido ainda. Use o formulário acima para começar.</td></tr>')}
               </tbody>
             </table>
           </div>
@@ -1349,48 +1391,56 @@ function viewOrc() {
     `;
   } else {
     // --- MODO: 1 ITEM • VÁRIOS FORNECEDORES (PADRÃO) ---
-    const tabelaLinhas = itens.map(i => {
+    const itensExibidos = termosBusca.length
+      ? itens.filter(i => matchBusca(`${i.forn || ''} ${i.nome || ''} ${i.obs || ''} ${i.link || ''} ${i.status || ''} ${S.orc.titulo || ''} ${S.orc.categoria || ''}`, termosBusca))
+      : itens;
+    const tabelaLinhas = itensExibidos.map(i => {
       const vTot = itemTotal(i);
       const vUnd = (i.valorUnd !== undefined && i.valorUnd !== '') ? num(i.valorUnd) : (qtdTotal > 0 ? (itemPrecoSemFrete(i) / qtdTotal) : 0);
       const ehMenor = (vTot === menorValor && menorValor > 0);
-      const urlCompra = i.link || i.obs || '';
-      const dom = extrairDominio(urlCompra);
+      const urlCompra = (i.link || i.obs || '').trim();
+      const urlCompraSegura = typeof safeHttpUrl === 'function' ? safeHttpUrl(urlCompra) : '';
+      const dom = extrairDominio(urlCompraSegura);
       const cmpHtml = orcBadgeComparacaoHtml(i, modo, qtdTotal);
+      const idEsc = esc(i.id);
+      const linkHtml = urlCompraSegura
+        ? `<a href="${esc(urlCompraSegura)}" target="_blank" rel="noopener noreferrer" class="btn-link-produto" title="${esc(urlCompraSegura)}"><span class="ui-glyph" aria-hidden="true">↗</span> ${esc(dom)}</a>`
+        : (urlCompra && !/^\s*(javascript|data|vbscript|file):/i.test(urlCompra)
+            ? `<span class="mu" style="font-size:12px;" title="${esc(urlCompra)}">${esc(urlCompra)}</span>`
+            : '<span class="mu" style="font-size:12px;">—</span>');
 
       return `
         <tr style="border-bottom:1px solid var(--bd);">
           <td style="padding:10px 8px; font-weight:600;">
             <div>
               ${esc(i.forn || '—')}
-              <span id="ob-${i.id}" class="pill o" style="font-size:10px; margin-left:4px; display:${ehMenor ? 'inline-block' : 'none'};">🏆 Menor Preço</span>
+              <span id="ob-${idEsc}" class="pill o" style="font-size:10px; margin-left:4px; display:${ehMenor ? 'inline-block' : 'none'};">★ Menor Preço</span>
             </div>
-            <div id="ocmp-${i.id}" class="orc-cmp-slot">${cmpHtml}</div>
+            <div id="ocmp-${idEsc}" class="orc-cmp-slot">${cmpHtml}</div>
           </td>
           <td style="padding:10px 8px;">
-            <input class="obs" style="margin:0; width:100px; text-align:right;" data-act="orcf" data-id="${i.id}" data-f="precoSemFrete" value="${esc(i.precoSemFrete ?? i.preco ?? '')}">
+            <input class="obs" style="margin:0; width:100px; text-align:right;" data-act="orcf" data-id="${idEsc}" data-f="precoSemFrete" value="${esc(i.precoSemFrete ?? i.preco ?? '')}">
           </td>
           <td style="padding:10px 8px;">
-            <input class="obs" style="margin:0; width:80px; text-align:right;" data-act="orcf" data-id="${i.id}" data-f="frete" value="${esc(i.frete ?? '')}">
+            <input class="obs" style="margin:0; width:80px; text-align:right;" data-act="orcf" data-id="${idEsc}" data-f="frete" value="${esc(i.frete ?? '')}">
           </td>
-          <td style="padding:10px 8px; font-weight:700; text-align:right;" id="ot-${i.id}">
+          <td style="padding:10px 8px; font-weight:700; text-align:right;" id="ot-${idEsc}">
             ${brl(vTot)}
           </td>
-          <td style="padding:10px 8px; text-align:right;" id="ou-${i.id}">
+          <td style="padding:10px 8px; text-align:right;" id="ou-${idEsc}">
             ${vUnd > 0 ? brl(vUnd) : '—'}
           </td>
           <td style="padding:10px 8px; text-align:center;">
-            ${urlCompra 
-              ? `<a href="${esc(urlCompra)}" target="_blank" rel="noopener noreferrer" class="btn-link-produto" title="${esc(urlCompra)}">🔗 ${esc(dom)}</a>` 
-              : '<span class="mu" style="font-size:12px;">—</span>'}
+            ${linkHtml}
           </td>
           <td style="padding:10px 8px;">
-            <select data-act="orcs" data-id="${i.id}" style="font-size:12px; padding:4px 6px;">
+            <select data-act="orcs" data-id="${idEsc}" style="font-size:12px; padding:4px 6px;">
               ${ORC_ST.map(st => `<option value="${st}" ${i.status === st ? 'selected' : ''}>${st}</option>`).join('')}
             </select>
           </td>
           <td style="padding:10px 8px; text-align:right; white-space:nowrap;">
-            ${i.forn ? `<button class="b ${norm(orcFornHistorico) === norm(i.forn) ? 'p' : ''}" data-act="orc_ver_hist_forn" data-forn="${esc(i.forn)}" style="font-size:11px; padding:3px 7px; margin-right:4px;" title="Ver histórico de preços deste fornecedor">📈</button>` : ''}
-            <button class="b danger" data-act="del_orcitem" data-id="${i.id}" style="font-size:11px; padding:3px 7px;">✕</button>
+            ${i.forn ? `<button class="b ${norm(orcFornHistorico) === norm(i.forn) ? 'p' : ''}" data-act="orc_ver_hist_forn" data-forn="${esc(i.forn)}" style="font-size:11px; padding:3px 7px; margin-right:4px;" title="Ver histórico de preços deste fornecedor"><span class="ui-glyph" aria-hidden="true">◷</span></button>` : ''}
+            <button class="b danger" data-act="del_orcitem" data-id="${idEsc}" style="font-size:11px; padding:3px 7px;">✕</button>
           </td>
         </tr>
       `;
@@ -1402,61 +1452,94 @@ function viewOrc() {
         <div class="card" style="margin-bottom:14px;">
           <h2>Tipo e Dados da Cotação</h2>
           ${seletorModoHtml}
-          <div class="fx" style="gap:10px; margin-top:12px;">
-            <input data-orc="titulo" placeholder="Título da Cotação (ex: Folhas A4, Pilhas, Canetas)" value="${esc(S.orc.titulo || '')}" style="flex:2.5 1 200px;">
-            <div class="preset-field-wrap" style="flex:1.5 1 180px;">
-              <select data-orc="categoria" style="flex:1;" aria-label="Categoria ou Centro de Custo" title="Categoria / Centro de Custo">
-                ${optPreset(catOrcList, S.orc.categoria || '', 'Categoria / Centro de Custo...', true)}
-              </select>
-              ${orcGear('categorias', 'Gerenciar Categorias / Centros de Custo')}
+          <div class="orc-header-grid" style="margin-top:14px; margin-bottom:0;">
+            <div class="field-group span-2-desktop">
+              <label class="field-label">Título da Cotação</label>
+              <input data-orc="titulo" placeholder="Ex: Folhas A4, Pilhas, Canetas" value="${esc(S.orc.titulo || '')}">
             </div>
-            <input data-orc="qtdTotal" placeholder="Qtd. Total" value="${esc(S.orc.qtdTotal || '')}" style="flex:1 1 105px;" title="Usada para calcular o valor por unidade">
-            <div class="preset-field-wrap" style="flex:1 1 115px;">
-              <select data-orc="unidade" style="flex:1;" aria-label="Unidade de medida" title="Unidade de Medida">
-                ${optPreset(unOrcList, S.orc.unidade || '', 'Unid...', true)}
-              </select>
-              ${orcGear('unidades', 'Gerenciar Unidades de Medida')}
+            <div class="field-group">
+              <label class="field-label">Categoria / Centro de Custo</label>
+              <div class="preset-field-wrap">
+                <select data-orc="categoria" aria-label="Categoria ou Centro de Custo" title="Categoria / Centro de Custo">
+                  ${optPreset(catOrcList, S.orc.categoria || '', 'Categoria / Centro de Custo...', true)}
+                </select>
+                ${orcGear('categorias', 'Gerenciar Categorias / Centros de Custo')}
+              </div>
             </div>
-            <input data-orc="data" type="date" value="${S.orc.data || hoje}" style="flex:1 1 130px;">
+            <div class="field-group">
+              <label class="field-label">Qtd. Total</label>
+              <input data-orc="qtdTotal" placeholder="Qtd. Total" value="${esc(S.orc.qtdTotal || '')}" title="Usada para calcular o valor por unidade">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Unidade</label>
+              <div class="preset-field-wrap">
+                <select data-orc="unidade" aria-label="Unidade de medida" title="Unidade de Medida">
+                  ${optPreset(unOrcList, S.orc.unidade || '', 'Unid...', true)}
+                </select>
+                ${orcGear('unidades', 'Gerenciar Unidades de Medida')}
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Data</label>
+              <input data-orc="data" type="date" value="${esc(S.orc.data || hoje)}">
+            </div>
           </div>
         </div>
 
         <div class="card" style="margin-bottom:14px;">
           <h2>Novo Fornecedor</h2>
-          <form data-form="orcitem" id="formNovoFornecedor">
-            <div class="preset-field-wrap" style="flex:1.4 1 175px;">
-              <select id="orcComparativoFavSelect" style="flex:1;" title="Preencher fornecedor e link favoritos" aria-label="Fornecedor Favorito">
-                <option value="">⚡ Favorito...</option>
-                ${favFornecedores.map((f, idx) => {
-                  const nomeF = typeof f === 'string' ? f : (f && f.nome ? f.nome : '');
-                  const linkF = (f && typeof f === 'object' && f.link) ? f.link : '';
-                  return `<option value="${idx}">${esc(nomeF)}${linkF ? ' 🔗' : ''}</option>`;
-                }).join('')}
-              </select>
-              ${orcGear('fornecedores', 'Gerenciar Fornecedores Favoritos')}
+          <form data-form="orcitem" id="formNovoFornecedor" class="form-grid-compact" style="margin-bottom:0;">
+            <div class="field-group">
+              <label class="field-label" for="orcComparativoFavSelect">Fornecedor Favorito</label>
+              <div class="preset-field-wrap">
+                <select id="orcComparativoFavSelect" title="Preencher fornecedor e link favoritos" aria-label="Fornecedor Favorito">
+                  <option value="">Favorito...</option>
+                  ${favFornecedores.map((f, idx) => {
+                    const nomeF = typeof f === 'string' ? f : (f && f.nome ? f.nome : '');
+                    const linkF = (f && typeof f === 'object' && f.link) ? f.link : '';
+                    return `<option value="${idx}">${esc(nomeF)}${linkF ? ' ↗' : ''}</option>`;
+                  }).join('')}
+                </select>
+                ${orcGear('fornecedores', 'Gerenciar Fornecedores Favoritos')}
+              </div>
             </div>
-            <input name="forn" id="cad_fornNome" list="listaFornecedoresFavoritos" placeholder="Nome do Fornecedor / Loja" required style="flex:2 1 160px;">
-            <input name="precoSemFrete" id="cad_precoSemFrete" placeholder="Preço (sem frete)" required style="flex:1 1 120px;">
-            <input name="frete" placeholder="Frete (R$)" style="flex:1 1 90px;">
-            <input name="valorUnd" id="cad_valorUnd" placeholder="Valor Und." style="flex:1 1 90px;" title="Calculado automaticamente se preenchida a quantidade total">
-            
-            <div class="input-link-wrapper">
-              <input name="link" id="cad_linkCompra" placeholder="Link de compra (URL do produto)" style="flex:1;">
-              <button type="button" class="b" data-act="encurtar_link_form" title="Encurta o link e limpa parâmetros de rastreio" style="font-size:11.5px; padding:4px 9px;">✂️ Encurtar</button>
+            <div class="field-group">
+              <label class="field-label" for="cad_fornNome">Nome do Fornecedor / Loja *</label>
+              <input name="forn" id="cad_fornNome" list="listaFornecedoresFavoritos" placeholder="Ex: Kalunga, Mercado Livre" required>
             </div>
-
-            <button class="b p" style="white-space:nowrap;">➕ Inserir Fornecedor</button>
+            <div class="field-group">
+              <label class="field-label" for="cad_precoSemFrete">Preço sem frete (R$) *</label>
+              <input name="precoSemFrete" id="cad_precoSemFrete" placeholder="0,00" required>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Frete (R$)</label>
+              <input name="frete" placeholder="0,00">
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="cad_valorUnd">Valor Unitário</label>
+              <input name="valorUnd" id="cad_valorUnd" placeholder="Automático" title="Calculado automaticamente se preenchida a quantidade total">
+            </div>
+            <div class="field-group span-2-desktop">
+              <label class="field-label" for="cad_linkCompra">Link de compra (URL)</label>
+              <div class="input-link-wrapper">
+                <input name="link" id="cad_linkCompra" placeholder="URL do produto">
+                <button type="button" class="b" data-act="encurtar_link_form" title="Encurta o link e limpa parâmetros de rastreio" style="font-size:11.5px; padding:4px 9px;"><span class="ui-glyph" aria-hidden="true">✂\uFE0E</span> Encurtar</button>
+              </div>
+            </div>
+            <div class="form-actions-cell">
+              <button class="b p" style="white-space:nowrap;">+ Inserir Fornecedor</button>
+            </div>
           </form>
         </div>
 
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <h2>Tabela de Valores (${itens.length})</h2>
+            <h2>Tabela de Valores (${termosBusca.length ? `${itensExibidos.length} de ${itens.length}` : itens.length})</h2>
             <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button class="b" data-act="orccopy">📋 Copiar Cotação</button>
-              <button class="b" data-act="orcxlsx" title="Gerar planilha Excel (.xlsx) formatada com KPIs, fórmulas e destaque do melhor preço">📥 Exportar Planilha</button>
-              <button class="b p" data-act="orcsalvarhist">💾 Arquivar no Histórico</button>
-              <button class="b danger" data-act="orcnovo">🧹 Limpar</button>
+              <button class="b" data-act="orccopy"><span class="ui-glyph" aria-hidden="true">≡</span> Copiar Cotação</button>
+              <button class="b" data-act="orcxlsx" title="Gerar planilha Excel (.xlsx) formatada com KPIs, fórmulas e destaque do melhor preço"><span class="ui-glyph" aria-hidden="true">⇩</span> Exportar Planilha</button>
+              <button class="b p" data-act="orcsalvarhist"><span class="ui-glyph" aria-hidden="true">⇩</span> Arquivar no Histórico</button>
+              <button class="b danger" data-act="orcnovo"><span class="ui-glyph" aria-hidden="true">✕</span> Limpar</button>
             </div>
           </div>
 
@@ -1475,7 +1558,9 @@ function viewOrc() {
                 </tr>
               </thead>
               <tbody>
-                ${tabelaLinhas || '<tr><td colspan="8" class="empty">Nenhum fornecedor cadastrado nesta cotação.</td></tr>'}
+                ${tabelaLinhas || (termosBusca.length && itens.length
+                  ? '<tr><td colspan="8" class="empty">Nenhum fornecedor encontrado neste filtro.</td></tr>'
+                  : '<tr><td colspan="8" class="empty">Nenhum fornecedor cadastrado nesta cotação.</td></tr>')}
               </tbody>
             </table>
           </div>
@@ -1524,14 +1609,14 @@ function viewOrc() {
         const pctLargura = maiorValor > 0 ? Math.max(8, Math.round((vTot / maiorValor) * 100)) : 0;
         const difPct = (menorValor > 0 && vTot > menorValor) 
           ? `+${Math.round(((vTot - menorValor) / menorValor) * 100)}%` 
-          : (ehMenor ? '🏆 Melhor Preço' : '');
+          : (ehMenor ? '★ Melhor Preço' : '');
 
         return `
           <div style="margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:13px;">
               <div>
                 <b>${esc(i.forn || 'Fornecedor')}</b>
-                ${ehMenor ? '<span class="pill o" style="font-size:10px; margin-left:6px;">🏆 Menor Valor</span>' : ''}
+                ${ehMenor ? '<span class="pill o" style="font-size:10px; margin-left:6px;">★ Menor Valor</span>' : ''}
               </div>
               <div style="display:flex; align-items:center; gap:8px;">
                 ${difPct && !ehMenor ? `<span class="pill w" style="font-size:10px;">${difPct}</span>` : ''}
@@ -1549,13 +1634,28 @@ function viewOrc() {
     grafBarrasHtml = `<div class="empty">${ehPedido ? 'Adicione itens ao pedido para visualizar a distribuição de custos.' : 'Adicione fornecedores na tabela para visualizar o gráfico comparativo de preços.'}</div>`;
   }
 
-  // 2. Gráfico e Histórico de Variação por Produto / Título
-  const produtosDisponiveis = [...new Set((S.orcHist || []).map(h => (h.titulo || '').trim()).filter(Boolean))].sort();
-  if (!prodFiltroHist && produtosDisponiveis.length) {
-    prodFiltroHist = produtosDisponiveis[0];
-  }
+  // 2. Gráfico e Histórico de Variação por Produto / Título (respeita filtro visual se aplicado)
+  const filtroHist = (typeof orcHistFiltroModo === 'string' && (orcHistFiltroModo === 'comparativo_fornecedores' || orcHistFiltroModo === 'pedido_fornecedor'))
+    ? orcHistFiltroModo
+    : 'todos';
+  const todoHist = S.orcHist || [];
+  const qtdComparativo = todoHist.filter(h => orcModo(h) === 'comparativo_fornecedores').length;
+  const qtdPedido = todoHist.filter(h => orcModo(h) === 'pedido_fornecedor').length;
+  const histPorModo = filtroHist === 'todos' ? todoHist : todoHist.filter(h => orcModo(h) === filtroHist);
+  const histExibidos = termosBusca.length
+    ? histPorModo.filter(h => {
+        const itensStr = (h.itens || []).map(x => `${x.forn || ''} ${x.nome || ''} ${x.obs || ''}`).join(' ');
+        return matchBusca(`${h.titulo || ''} ${h.fornecedor || ''} ${h.categoria || ''} ${h.obs || ''} ${h.data || ''} ${itensStr}`, termosBusca);
+      })
+    : histPorModo;
 
-  const historicoFiltrado = (S.orcHist || []).filter(h => !prodFiltroHist || norm(h.titulo) === norm(prodFiltroHist));
+  const produtosDisponiveis = [...new Set(histExibidos.map(h => (h.titulo || '').trim()).filter(Boolean))].sort();
+  const prodAtivo = (prodFiltroHist && produtosDisponiveis.some(p => norm(p) === norm(prodFiltroHist)))
+    ? (produtosDisponiveis.find(p => norm(p) === norm(prodFiltroHist)) || prodFiltroHist)
+    : (produtosDisponiveis[0] || '');
+  prodFiltroHist = prodAtivo;
+
+  const historicoFiltrado = histExibidos.filter(h => !prodAtivo || norm(h.titulo) === norm(prodAtivo));
   historicoFiltrado.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
 
   let linhaDoTempoHtml = '';
@@ -1600,18 +1700,15 @@ function viewOrc() {
       `;
     }).join('');
   } else if (historicoFiltrado.length === 1) {
-    linhaDoTempoHtml = `<div class="empty">Apenas 1 cotação arquivada para "${esc(prodFiltroHist)}". Arquive novas cotações nos próximos meses para ver a linha do tempo de variação percentual.</div>`;
+    linhaDoTempoHtml = `<div class="empty">Apenas 1 cotação arquivada para "${esc(prodAtivo)}". Arquive novas cotações nos próximos meses para ver a linha do tempo de variação percentual.</div>`;
   } else {
-    linhaDoTempoHtml = '<div class="empty">Nenhuma cotação arquivada para comparar variações históricas.</div>';
+    linhaDoTempoHtml = '<div class="empty">Nenhuma cotação arquivada para comparar variações históricas neste filtro.</div>';
   }
 
-  // 3. Lista Completa de Arquivos (com destaque e filtro opcional pelo modo ativo, preservando registros antigos)
-  const todoHist = S.orcHist || [];
-  const qtdNoModoAtivo = todoHist.filter(h => orcModo(h) === modo).length;
-  const histExibidos = orcHistFiltrarModo
-    ? todoHist.filter(h => orcModo(h) === modo)
-    : todoHist;
-  const rotuloModoAtivo = ehPedido ? '📦 Vários Itens • 1 Fornecedor' : '🏢 1 Item • Vários Fornecedores';
+  // 3. Lista Completa de Arquivos (com filtro de visualização de 3 opções: Todos [padrão], 1 Item/Vários Fornecedores, Vários Itens/1 Fornecedor)
+  const rotuloFiltro = filtroHist === 'comparativo_fornecedores'
+    ? '1 Item / Vários Fornecedores'
+    : (filtroHist === 'pedido_fornecedor' ? 'Vários Itens / 1 Fornecedor' : 'Todos os tipos');
 
   const historicoListaCards = histExibidos.map(h => {
     const mHist = orcModo(h);
@@ -1620,10 +1717,10 @@ function viewOrc() {
     const hItens = h.itens || [];
     const totalRef = orcTotalReferencia(h);
     const tagModo = ehPedHist
-      ? `<span class="orc-hist-tag pedido">📦 Pedido único${h.fornecedor ? ' (' + esc(h.fornecedor) + ')' : ''}</span>`
-      : `<span class="orc-hist-tag multi">🏢 Multi-fornecedor</span>`;
-    const badgeModoAtivo = (!orcHistFiltrarModo && combinaModoAtivo)
-      ? `<span class="orc-hist-match-pill" title="Corresponde ao modo selecionado acima">● Modo ativo</span>`
+      ? `<span class="orc-hist-tag pedido">Vários Itens / 1 Fornecedor${h.fornecedor ? ' (' + esc(h.fornecedor) + ')' : ''}</span>`
+      : `<span class="orc-hist-tag multi">1 Item / Vários Fornecedores</span>`;
+    const badgeModoAtivo = (filtroHist === 'todos' && combinaModoAtivo)
+      ? `<span class="orc-hist-match-pill" title="Mesmo formato da cotação aberta na tabela">● Em edição</span>`
       : '';
 
     const itensListaHtml = hItens.length
@@ -1637,7 +1734,7 @@ function viewOrc() {
             }
             const tot = itemTotal(it);
             const ehMin = totalRef > 0 && Math.abs(tot - totalRef) < 0.005;
-            return `<li><span>${esc(it.forn || it.nome || 'Fornecedor')}${ehMin ? ' <span class="pill o" style="font-size:9.5px; padding:0 5px;">🏆</span>' : ''}</span><b>${brl(tot)}</b></li>`;
+            return `<li><span>${esc(it.forn || it.nome || 'Fornecedor')}${ehMin ? ' <span class="pill o" style="font-size:9.5px; padding:0 5px;">★</span>' : ''}</span><b>${brl(tot)}</b></li>`;
           }).join('')}
         </ul>`
       : '';
@@ -1649,7 +1746,7 @@ function viewOrc() {
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <b>${esc(h.titulo || (ehPedHist ? (h.fornecedor || 'Pedido Único') : 'Cotação'))} — ${br(h.data)}</b>
               ${tagModo}
-              ${h.categoria ? `<span class="pill b" style="font-size:10px; padding:1px 7px;">🏷️ ${esc(h.categoria)}</span>` : ''}
+              ${h.categoria ? `<span class="pill b" style="font-size:10px; padding:1px 7px;">${esc(h.categoria)}</span>` : ''}
               ${badgeModoAtivo}
             </div>
             <span class="mu" style="font-size:12px;">
@@ -1658,16 +1755,16 @@ function viewOrc() {
             </span>
           </div>
           <div class="orc-hist-actions">
-            <button class="b" data-act="orc_carregar_hist" data-id="${h.id}">Carregar na Tela</button>
-            <button class="b danger" data-act="del_orchist" data-id="${h.id}">Excluir</button>
+            <button class="b" data-act="orc_carregar_hist" data-id="${esc(h.id)}">Carregar na Tela</button>
+            <button class="b danger" data-act="del_orchist" data-id="${esc(h.id)}">Excluir</button>
           </div>
         </div>
         ${itensListaHtml}
       </div>
     `;
   }).join('') || (
-    orcHistFiltrarModo && todoHist.length
-      ? `<div class="empty">Nenhuma cotação arquivada no modo <b>${rotuloModoAtivo}</b>. <button class="b" data-act="orc_tog_filtro_hist_modo" style="margin-left:8px; font-size:11.5px; padding:3px 9px;">Mostrar todos (${todoHist.length})</button></div>`
+    filtroHist !== 'todos' && todoHist.length
+      ? `<div class="empty">Nenhuma cotação arquivada no filtro <b>${rotuloFiltro}</b>. <button type="button" class="b" data-act="orc_set_filtro_hist_modo" data-v="todos" style="margin-left:8px; font-size:11.5px; padding:3px 9px;">Mostrar todos (${todoHist.length})</button></div>`
       : '<div class="empty">Nenhuma cotação arquivada no histórico.</div>'
   );
 
@@ -1675,24 +1772,22 @@ function viewOrc() {
     <div style="flex: 0 0 100%; min-width: 100%;">
       <div class="card" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-          <h2 style="margin:0;">Tipo de Cotação</h2>
-          <button class="b" data-act="orc_ir_slide" data-s="0" style="font-size:12px; padding:5px 10px;" title="Abrir o formulário no modo selecionado">📋 Abrir formulário neste modo</button>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <h2 style="margin:0;">${ehPedido ? 'Distribuição de Custos do Pedido' : 'Comparativo de Preços dos Fornecedores'}</h2>
+            <span class="pill b" style="font-size:11px;">${ehPedido ? 'Vários Itens • 1 Fornecedor' : '1 Item • Vários Fornecedores'}</span>
+          </div>
+          <button class="b" data-act="orc_ir_slide" data-s="0" style="font-size:12px; padding:5px 10px;" title="Voltar para edição da tabela"><span class="ui-glyph" aria-hidden="true">◂</span> Voltar para Tabela</button>
         </div>
-        ${seletorModoHtml}
-      </div>
-
-      <div class="card" style="margin-bottom:14px;">
-        <h2>${ehPedido ? '📊 Distribuição de Custos do Pedido' : '📊 Comparativo de Preços dos Fornecedores'}</h2>
         <div class="mu" style="margin-bottom:12px;">${ehPedido ? `Composição do pedido ativo (${esc(S.orc.fornecedor || S.orc.titulo || 'Pedido atual')}):` : `Gráfico de barras da cotação ativa (${esc(S.orc.titulo || 'Item atual')}):`}</div>
         ${grafBarrasHtml}
       </div>
 
       <div class="card" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-          <h2>📈 Linha do Tempo & Variação Histórica</h2>
+          <h2>Linha do Tempo & Variação Histórica</h2>
           ${produtosDisponiveis.length ? `
             <select id="filtroProdGraf" style="font-size:12.5px; padding:4px 8px;">
-              ${produtosDisponiveis.map(p => `<option value="${esc(p)}" ${p === prodFiltroHist ? 'selected' : ''}>${esc(p)}</option>`).join('')}
+              ${produtosDisponiveis.map(p => `<option value="${esc(p)}" ${p === prodAtivo ? 'selected' : ''}>${esc(p)}</option>`).join('')}
             </select>
           ` : ''}
         </div>
@@ -1703,19 +1798,30 @@ function viewOrc() {
       </div>
 
       <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
-          <h2 style="margin:0;">💾 Cotações Arquivadas (${histExibidos.length}${orcHistFiltrarModo ? ` de ${todoHist.length}` : ''})</h2>
-          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-            <button type="button" class="b ${!orcHistFiltrarModo ? 'p' : ''}" data-act="orc_set_filtro_hist_modo" data-v="todos" style="font-size:11.5px; padding:4px 10px;">Todos (${todoHist.length})</button>
-            <button type="button" class="b ${orcHistFiltrarModo ? 'p' : ''}" data-act="orc_set_filtro_hist_modo" data-v="modo" style="font-size:11.5px; padding:4px 10px;">Somente modo ativo (${qtdNoModoAtivo})</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0;">Cotações Arquivadas (${histExibidos.length}${(filtroHist !== 'todos' || termosBusca.length) ? ` de ${todoHist.length}` : ''})</h2>
+        </div>
+        <div class="orc-hist-filter-wrap">
+          <div class="orc-hist-filter-caption">
+            <span class="orc-hist-filter-badge"><span class="ui-glyph" aria-hidden="true">⌕</span> Filtro de visualização do histórico</span>
+            <span>Mostra apenas os arquivos do formato escolhido (não altera o modo da cotação em edição).</span>
+          </div>
+          <div class="orc-hist-filter-bar" role="tablist" aria-label="Filtrar cotações arquivadas por formato">
+            <button type="button" class="orc-hist-filter-btn ${filtroHist === 'todos' ? 'active' : ''}" data-act="orc_set_filtro_hist_modo" data-v="todos" role="tab" aria-selected="${filtroHist === 'todos'}">
+              Todos (${todoHist.length})
+            </button>
+            <button type="button" class="orc-hist-filter-btn ${filtroHist === 'comparativo_fornecedores' ? 'active' : ''}" data-act="orc_set_filtro_hist_modo" data-v="comparativo_fornecedores" role="tab" aria-selected="${filtroHist === 'comparativo_fornecedores'}">
+              1 Item / Vários Fornecedores (${qtdComparativo})
+            </button>
+            <button type="button" class="orc-hist-filter-btn ${filtroHist === 'pedido_fornecedor' ? 'active' : ''}" data-act="orc_set_filtro_hist_modo" data-v="pedido_fornecedor" role="tab" aria-selected="${filtroHist === 'pedido_fornecedor'}">
+              Vários Itens / 1 Fornecedor (${qtdPedido})
+            </button>
           </div>
         </div>
         <div class="mu" style="margin-bottom:10px;">
-          ${orcHistFiltrarModo
-            ? `Filtrando arquivos do modo <b>${rotuloModoAtivo}</b>. Clique em "Carregar na Tela" para reabrir e comparar reajustes:`
-            : `Exibindo todos os arquivos (com destaque para <b>${rotuloModoAtivo}</b>). Clique em "Carregar na Tela" para reabrir e comparar reajustes:`}
+          Exibindo: <b>${rotuloFiltro}</b>. Clique em <b>"Carregar na Tela"</b> para abrir qualquer orçamento arquivado no modo correspondente e comparar reajustes:
         </div>
-        <div style="max-height:360px; overflow-y:auto;">
+        <div style="max-height:380px; overflow-y:auto;">
           ${historicoListaCards}
         </div>
       </div>

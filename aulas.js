@@ -1,6 +1,6 @@
 /* ========================================================
    AULAS.JS - GESTÃO DE TURMAS, CRONOGRAMAS E MATERIAIS
-   Painel Operacional Prius
+   ARGOS OPS
 ======================================================== */
 
 const KEYS = { 
@@ -29,7 +29,7 @@ const TMRE = /^(\d{1,2})(?::(\d{2}))?\s*h?\s*(?:-|–|as|a)\s*(\d{1,2})(?::(\d{2
 const TTRE = /(domingo|segunda|terca|quarta|quinta|sexta|sabado)[^0-9]{0,20}(\d{1,2})(?::(\d{2}))?\s*h?\s*(?:-|–|as|a)\s*(\d{1,2})(?::(\d{2}))?\s*h?/g;
 const hh = (h, m) => pad(+h) + ':' + (m || '00');
 const nHora = (a, am, b, bm) => hh(a, am) + '-' + hh(b, bm);
-const turmaDoNome = f => f.replace(/\.pdf$/i, '').replace(/^\d{1,2}-\d{1,2}-\d{4}_/, '').replace(/(cronograma|docx|oficial|alunos|prius|20\d\d)/gi, ' ').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || f;
+const turmaDoNome = f => f.replace(/\.pdf$/i, '').replace(/^\d{1,2}-\d{1,2}-\d{4}_/, '').replace(/(cronograma|docx|oficial|alunos|prius|argos|ops|20\d\d)/gi, ' ').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || f;
 
 async function pdfItems(buf) {
   const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise, P = [];
@@ -298,10 +298,14 @@ function aplicar() {
   if (!prev) return;
   const n = { n: 0, a: 0, r: 0 };
   const agora = new Date().toISOString();
+  const turmasAntes = new Set(S.aulas.map(a => norm(a.turma)).filter(Boolean));
+  const turmasTocadas = new Set();
+
   for (const r of prev.rows) {
     if (r.x) continue;
     if (r.tipo === 'nova') {
-      S.aulas.push({ id: uid(), prof: r.prof, turma: r.turma, dia: r.dia, hora: r.hora, desc: r.desc, confirmada: false, destaque: 'nova', modificadoEm: agora });
+      S.aulas.push({ id: uid(), prof: r.prof, turma: r.turma, dia: r.dia, hora: r.hora, desc: r.desc, confirmada: false, destaque: 'nova', createdAt: agora, modificadoEm: agora });
+      if (r.turma) turmasTocadas.add(r.turma);
       n.n++;
     } else if (r.tipo === 'alterada') {
       const e = find('aulas', r.id);
@@ -310,13 +314,26 @@ function aplicar() {
         ['prof', 'hora', 'desc'].forEach(k => { if (r[k]) e[k] = r[k]; });
         e.destaque = 'alterada';
         e.modificadoEm = agora;
+        if (e.turma || r.turma) turmasTocadas.add(e.turma || r.turma);
         n.a++;
       }
     } else if (r.tipo === 'removida' && prev.rem) {
       S.aulas = S.aulas.filter(x => x.id !== r.id);
+      if (r.turma) turmasTocadas.add(r.turma);
       n.r++;
     }
   }
+
+  if (prev.sub && dest && dest !== 'novo' && turmasAntes.has(norm(dest))) {
+    turmasTocadas.add(dest);
+  }
+
+  if (typeof touchCronograma === 'function') {
+    turmasTocadas.forEach(tNome => {
+      touchCronograma(tNome, !turmasAntes.has(norm(tNome)), agora);
+    });
+  }
+
   S.hist.unshift({ nome: prev.nome, data: hoje, ...n });
   S.hist = S.hist.slice(0, 5);
   save();
@@ -357,18 +374,24 @@ function uploadCard() {
   
   const modoNav = `
     <div class="fx" style="gap:6px; margin-bottom:12px;">
-      <button class="b ${modoEntradaCronograma === 'pdf' ? 'p' : ''}" data-act="set_modo_crono" data-m="pdf">📄 Arquivo PDF</button>
-      <button class="b ${modoEntradaCronograma === 'texto' ? 'p' : ''}" data-act="set_modo_crono" data-m="texto">📋 Colar Texto</button>
-      <button class="b ${modoEntradaCronograma === 'novo' ? 'p' : ''}" data-act="set_modo_crono" data-m="novo">➕ Novo Cronograma</button>
+      <button class="b ${modoEntradaCronograma === 'pdf' ? 'p' : ''}" data-act="set_modo_crono" data-m="pdf"><span class="ui-glyph" aria-hidden="true">⇧</span> Arquivo PDF</button>
+      <button class="b ${modoEntradaCronograma === 'texto' ? 'p' : ''}" data-act="set_modo_crono" data-m="texto"><span class="ui-glyph" aria-hidden="true">≡</span> Colar Texto</button>
+      <button class="b ${modoEntradaCronograma === 'novo' ? 'p' : ''}" data-act="set_modo_crono" data-m="novo">+ Novo Cronograma</button>
     </div>
   `;
 
   if (modoEntradaCronograma === 'pdf') {
     let body = `
-      <div class="mu" style="margin-bottom:8px">Envie o PDF do cronograma oficial para importar ou atualizar aulas automaticamente:</div>
-      <div class="fx">
-        <input id="turmaPad" placeholder="Nome da turma padrão (opcional)" value="${esc(turmaPad)}" style="flex:2 1 200px">
-        <input id="file" type="file" accept=".pdf,application/pdf" style="flex:3 1 240px">
+      <div class="mu" style="margin-bottom:10px">Envie o PDF do cronograma oficial para importar ou atualizar aulas automaticamente:</div>
+      <div class="form-grid-compact" style="margin-bottom:0;">
+        <div class="field-group">
+          <label class="field-label" for="turmaPad">Turma padrão (opcional)</label>
+          <input id="turmaPad" placeholder="Nome da turma padrão (opcional)" value="${esc(turmaPad)}">
+        </div>
+        <div class="field-group span-2-desktop">
+          <label class="field-label" for="file">Arquivo PDF do cronograma</label>
+          <input id="file" type="file" accept=".pdf,application/pdf">
+        </div>
       </div>
     `;
     return card('Entrada de Cronogramas', modoNav + body);
@@ -403,7 +426,7 @@ function uploadCard() {
   const optTurnoHtml = typeof renderPresetSelectOptions === 'function'
     ? renderPresetSelectOptions(turnosList, '', 'Turno (Opc.)', true)
     : `<option value="">Turno (Opc.)</option>` + turnosList.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
-  const gearBtn = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '⚙️', title) : '';
+  const gearBtn = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '\u2699\uFE0E', title) : '';
 
   let bodyNovo = `
     <div class="mu" style="margin-bottom:10px">Defina a nova turma e adicione aula por aula com todos os campos necessários:</div>
@@ -425,21 +448,38 @@ function uploadCard() {
     ${turmaAtiva ? `
       <datalist id="listaProfsManual">${nomesProfList.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <datalist id="listaDisciplinasManual">${disciplinasList.map(d => `<option value="${esc(d)}">`).join('')}</datalist>
-      <form data-form="aula_manual_nova">
-        <input name="prof" list="listaProfsManual" placeholder="Professor (Obrigatório)" required style="flex:2 1 180px">
-        <div class="preset-field-wrap" style="flex:1 1 130px;">
-          <select name="turno" style="flex:1;" aria-label="Turno">
-            ${optTurnoHtml}
-          </select>
-          ${gearBtn('turnos', 'Gerenciar Turnos')}
+      <form data-form="aula_manual_nova" class="form-grid-compact">
+        <div class="field-group">
+          <label class="field-label">Professor *</label>
+          <input name="prof" list="listaProfsManual" placeholder="Professor (Obrigatório)" required>
         </div>
-        <input name="dia" type="date" value="${amanha}" required style="flex:1 1 130px" title="Data da Aula (Obrigatório)">
-        <input name="hora" type="time" required style="flex:1 1 110px" title="Horário (Obrigatório)">
-        <div class="preset-field-wrap" style="flex:2.5 1 200px;">
-          <input name="desc" list="listaDisciplinasManual" placeholder="Disciplina / Conteúdo (Opcional)" style="flex:1;">
-          ${gearBtn('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+        <div class="field-group">
+          <label class="field-label">Turno (Opcional)</label>
+          <div class="preset-field-wrap">
+            <select name="turno" aria-label="Turno">
+              ${optTurnoHtml}
+            </select>
+            ${gearBtn('turnos', 'Gerenciar Turnos')}
+          </div>
         </div>
-        <button class="b p" style="white-space:nowrap;">➕ Inserir Aula</button>
+        <div class="field-group">
+          <label class="field-label">Data da Aula *</label>
+          <input name="dia" type="date" value="${amanha}" required title="Data da Aula (Obrigatório)">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Horário *</label>
+          <input name="hora" type="time" required title="Horário (Obrigatório)">
+        </div>
+        <div class="field-group span-2-desktop">
+          <label class="field-label">Disciplina / Conteúdo</label>
+          <div class="preset-field-wrap">
+            <input name="desc" list="listaDisciplinasManual" placeholder="Disciplina / Conteúdo (Opcional)">
+            ${gearBtn('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+          </div>
+        </div>
+        <div class="form-actions-cell">
+          <button class="b p" style="white-space:nowrap;">+ Inserir Aula</button>
+        </div>
       </form>
 
       <div style="margin-top:14px;">
@@ -451,7 +491,7 @@ function uploadCard() {
                 <b>${esc(a.prof)} — ${wd(a.dia)} ${br(a.dia)} às ${esc(a.hora)}${a.turno ? ` <span class="pill b" style="font-size:10px; padding:1px 6px; margin-left:4px;">${esc(a.turno)}</span>` : ''}</b>
                 ${a.desc ? `<span class="mu">${esc(a.desc)}</span>` : ''}
               </div>
-              <button class="b danger" data-act="del_aula" data-id="${a.id}" style="font-size:11px; padding:2px 8px;">Excluir</button>
+              <button class="b danger" data-act="del_aula" data-id="${esc(a.id)}" style="font-size:11px; padding:2px 8px;">Excluir</button>
             </div>
           `).join('') || '<div class="empty">Nenhuma aula inserida para esta turma ainda. Preencha os campos acima para começar!</div>'}
         </div>
@@ -476,15 +516,49 @@ function destSel() {
   return `<div class="fx" style="margin:8px 0 0"><select id="dest" style="flex:2 1 240px"><option value="novo" ${dest === 'novo' ? 'selected' : ''}>Adicionar como novo cronograma</option>${ex.map(t => `<option value="${esc(t)}" ${dest === t ? 'selected' : ''}>Substituir: ${esc(t)}</option>`).join('')}</select>${dest === 'novo' ? `<input id="nomeNovo" style="flex:2 1 200px" placeholder="Nome do cronograma" value="${esc(nomeNovo)}">` : ''}</div>`;
 }
 function cronoCard() {
-  const ex = turmasExist(); if (!ex.length) return '';
-  return card('Cronogramas Cadastrados', ex.map(t => { const L = S.aulas.filter(a => a.turma === t).map(a => a.dia).sort(); return `<div class="row"><div class="t"><b>${esc(t)}</b><span class="mu">${L.length} aulas cadastradas</span></div><button class="b ${destPre === t ? 'p' : ''}" data-act="crsub" data-t="${esc(t)}">${destPre === t ? 'Substituindo...' : 'Substituir'}</button><button class="b" data-act="crdel" data-t="${esc(t)}">Apagar</button></div>`; }).join(''));
+  const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
+  const ex = turmasExist().filter(t => !termosBusca.length || matchBusca(t, termosBusca));
+  if (!ex.length) return '';
+  return card('Cronogramas Cadastrados', ex.map(t => {
+    const L = S.aulas.filter(a => a.turma === t).map(a => a.dia).sort();
+    const meta = (S.cronogramas && Object.prototype.hasOwnProperty.call(S.cronogramas, norm(t)))
+      ? S.cronogramas[norm(t)]
+      : null;
+    const cAt = meta && meta.createdAt ? meta.createdAt : '';
+    const uAt = meta && meta.updatedAt ? meta.updatedAt : '';
+    const cFmt = cAt && typeof formatarDataHoraBR === 'function' ? formatarDataHoraBR(cAt) : '';
+    const uFmt = uAt && typeof formatarDataHoraBR === 'function' ? formatarDataHoraBR(uAt) : '';
+
+    let metaHtml = '';
+    if (cFmt && uFmt && String(uAt) !== String(cAt)) {
+      metaHtml = `<span class="crono-meta-ts is-updated" title="Criado em ${esc(cFmt)}">Atualizado em ${esc(uFmt)}</span>`;
+    } else if (cFmt) {
+      metaHtml = `<span class="crono-meta-ts">Adicionado em ${esc(cFmt)}</span>`;
+    } else if (uFmt) {
+      metaHtml = `<span class="crono-meta-ts is-updated">Atualizado em ${esc(uFmt)}</span>`;
+    } else {
+      metaHtml = `<span class="crono-meta-ts is-empty">Data não registrada</span>`;
+    }
+
+    return `<div class="row">
+      <div class="t">
+        <b>${esc(t)}</b>
+        <div class="crono-sub-meta">
+          <span class="mu">${L.length} aulas cadastradas</span>
+          ${metaHtml}
+        </div>
+      </div>
+      <button class="b ${destPre === t ? 'p' : ''}" data-act="crsub" data-t="${esc(t)}">${destPre === t ? 'Substituindo...' : 'Substituir'}</button>
+      <button class="b" data-act="crdel" data-t="${esc(t)}">Apagar</button>
+    </div>`;
+  }).join(''));
 }
 
 const aulaRow = a => {
-  const bdg = (!a.confirmada && a.destaque) ? `<span class="pill ${a.destaque === 'nova' ? 'o' : 'w'}" style="margin-left:6px">${a.destaque.toUpperCase()}</span>` : '';
+  const bdg = (!a.confirmada && a.destaque) ? `<span class="pill ${a.destaque === 'nova' ? 'o' : 'w'}" style="margin-left:6px">${esc(String(a.destaque).toUpperCase())}</span>` : '';
   return `
     <div class="row ${a.confirmada ? 'done' : ''}">
-      <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} title="Confirmar aula">
+      <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} title="Confirmar aula">
       <div class="t">
         <b>${esc(a.prof || 'Sem professor')} — ${esc(a.turma)} ${bdg}</b>
         <span class="mu">${wd(a.dia)} ${br(a.dia)}${a.hora ? ' às ' + esc(a.hora) : ''}${a.desc ? ' — ' + esc(a.desc) : ''}</span>
@@ -496,30 +570,60 @@ const aulaRow = a => {
 // Card de Fila de Envio de Materiais (Slides)
 function cardFilaMateriais() {
   const turmasDisponiveis = [...new Set(S.aulas.map(a => a.turma).filter(Boolean))].sort();
-  const fila = S.filaMateriais || [];
+  const formasEnvioList = typeof getPresetList === 'function'
+    ? getPresetList('operacao', 'formasEnvio')
+    : ['WhatsApp', 'E-mail', 'Drive', 'Impresso', 'Servidor / Rede'];
+  const optEnvioHtml = typeof renderPresetSelectOptions === 'function'
+    ? renderPresetSelectOptions(formasEnvioList, '', 'Forma de envio (opc.)...', true)
+    : `<option value="">Forma de envio (opc.)...</option>` + formasEnvioList.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  const btnEnvioGear = typeof presetGearBtn === 'function'
+    ? presetGearBtn('operacao', 'formasEnvio', '+', 'Gerenciar Formas de Envio de Material')
+    : '';
+  const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
+  const filaBruta = S.filaMateriais || [];
+  const fila = filaBruta
+    .map((item, idx) => ({ item, idx }))
+    .filter(({ item }) => !termosBusca.length || matchBusca(`${item.turma} ${item.caminho} ${item.formaEnvio || ''}`, termosBusca));
 
-  let itensHtml = fila.map((item, idx) => `
+  let itensHtml = fila.map(({ item, idx }) => `
     <div class="row">
       <div class="t">
-        <b>${esc(item.turma)}</b>
+        <b>${esc(item.turma)}${item.formaEnvio ? ` <span class="pill b" style="font-size:10.5px; padding:1px 7px; margin-left:4px;">${esc(item.formaEnvio)}</span>` : ''}</b>
         <span class="mu" style="word-break: break-all;">${esc(item.caminho)}</span>
       </div>
       <button class="b danger" data-act="del_fila" data-i="${idx}">Remover</button>
     </div>
-  `).join('') || '<div class="empty">Nenhum material adicionado à fila hoje.</div>';
+  `).join('') || `<div class="empty">${termosBusca.length ? 'Nenhum material na fila correspondente ao filtro.' : 'Nenhum material adicionado à fila hoje.'}</div>`;
 
-  let textoConsolidado = fila.map(item => `${item.turma}\n${item.caminho}`).join('\n\n');
+  let textoConsolidado = filaBruta.map(item => `${item.turma}${item.formaEnvio ? ` (${item.formaEnvio})` : ''}\n${item.caminho}`).join('\n\n');
   let linkWhatsApp = `https://wa.me/?text=${encodeURIComponent(textoConsolidado)}`;
 
   let body = `
     <div class="mu" style="margin-bottom:8px">Adicione os materiais conforme for salvando no servidor. No fim, copie ou envie tudo de uma vez.</div>
-    <form data-form="fila_material">
-      <select name="turma" required style="flex:2 1 200px">
-        <option value="">Selecione a turma...</option>
-        ${turmasDisponiveis.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
-      </select>
-      <input name="caminho" placeholder="Cole o caminho do servidor (ex: Z:\\...)" required style="flex:3 1 250px">
-      <button class="b p">Adicionar à Fila</button>
+    <form data-form="fila_material" class="form-grid-compact">
+      <div class="field-group">
+        <label class="field-label">Turma *</label>
+        <select name="turma" required>
+          <option value="">Selecione a turma...</option>
+          ${turmasDisponiveis.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Forma de Envio</label>
+        <div class="preset-field-wrap">
+          <select name="formaEnvio" aria-label="Forma de envio do material">
+            ${optEnvioHtml}
+          </select>
+          ${btnEnvioGear}
+        </div>
+      </div>
+      <div class="field-group span-2-desktop">
+        <label class="field-label">Caminho do material no servidor *</label>
+        <input name="caminho" placeholder="Cole o caminho do servidor (ex: Z:\\...)" required>
+      </div>
+      <div class="form-actions-cell">
+        <button class="b p" style="white-space:nowrap;">+ Adicionar à Fila</button>
+      </div>
     </form>
     <div style="margin: 12px 0;">
       <b>Materiais na fila (${fila.length}):</b>
@@ -529,35 +633,48 @@ function cardFilaMateriais() {
     </div>
   `;
 
-  if (fila.length > 0) {
+  if (filaBruta.length > 0) {
     body += `
       <div class="fx" style="margin-top:10px;">
-        <button class="b p" data-act="copiar_fila">📋 Copiar Mensagem Pronta</button>
-        <a href="${linkWhatsApp}" target="_blank" class="b p" style="text-decoration:none; display:inline-flex; align-items:center; background:#25d366; border-color:#25d366; color:#fff;">🚀 Enviar no WhatsApp</a>
-        <button class="b p" data-act="concluir_fila_materiais">✅ Concluir Envio e Baixar Pendências</button>
+        <button class="b p" data-act="copiar_fila"><span class="ui-glyph" aria-hidden="true">≡</span> Copiar Mensagem Pronta</button>
+        <a href="${esc(linkWhatsApp)}" target="_blank" rel="noopener noreferrer" class="b p" style="text-decoration:none; display:inline-flex; align-items:center; background:#25d366; border-color:#25d366; color:#fff;"><span class="ui-glyph" aria-hidden="true">↗</span> Enviar no WhatsApp</a>
+        <button class="b p" data-act="concluir_fila_materiais"><span class="ui-glyph" aria-hidden="true">✓</span> Concluir Envio e Baixar Pendências</button>
         <button class="b danger" data-act="limpar_fila">Limpar Fila</button>
       </div>
     `;
   }
 
-  return card('📦 Fila de Envio de Materiais (Slides)', body);
+  return card('Fila de Envio de Materiais (Slides)', body);
 }
 
 // Renderizador da Aba Aulas
 function viewAulas() {
   const subNav = `
     <div class="fx" style="gap:6px; margin-bottom:12px;">
-      <button class="b ${subTabAulas === 'quadro' ? 'p' : ''}" data-act="sub_aulas" data-v="quadro">📋 Quadro e Gestão</button>
-      <button class="b ${subTabAulas === 'import' ? 'p' : ''}" data-act="sub_aulas" data-v="import">📥 Cronogramas e Materiais</button>
+      <button class="b ${subTabAulas === 'quadro' ? 'p' : ''}" data-act="sub_aulas" data-v="quadro">Quadro e Gestão</button>
+      <button class="b ${subTabAulas === 'import' ? 'p' : ''}" data-act="sub_aulas" data-v="import">Cronogramas e Materiais</button>
     </div>
   `;
 
   if (subTabAulas === 'import') {
-    return subNav + uploadCard() + cronoCard() + cardFilaMateriais();
+    if (prev) {
+      return subNav + uploadCard() + cronoCard() + cardFilaMateriais();
+    }
+    return subNav + `
+      <div class="ops-two-col">
+        <div class="ops-two-col-col">
+          ${uploadCard()}
+          ${cronoCard()}
+        </div>
+        <div class="ops-two-col-col">
+          ${cardFilaMateriais()}
+        </div>
+      </div>
+    `;
   }
 
-  // Se houver termo de busca, pesquisa em TODAS as aulas (passadas e futuras) com suporte a múltiplas palavras e datas brasileiras
-  const termosBusca = norm(buscaAulas).split(/\s+/).filter(Boolean);
+  // Se houver busca global ativa, pesquisa em TODAS as aulas (passadas e futuras) com suporte a múltiplas palavras e datas brasileiras
+  const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
   
   let l = S.aulas.filter(a => {
     if (!termosBusca.length) return showPast || a.dia >= hoje;
@@ -565,9 +682,9 @@ function viewAulas() {
     const diaBr = br(a.dia); // ex: 31/10
     const diaBrAno = a.dia ? a.dia.split('-').reverse().join('/') : ''; // ex: 31/10/2026
     const diaSemana = wd(a.dia); // ex: seg, ter, sáb
-    const textoCorpus = `${norm(a.prof)} ${norm(a.turma)} ${norm(a.desc)} ${a.dia} ${diaBr} ${diaBrAno} ${diaSemana} ${norm(a.hora)}`;
+    const textoCorpus = `${a.prof} ${a.turma} ${a.desc} ${a.turno || ''} ${a.formaEnvio || ''} ${a.dia} ${diaBr} ${diaBrAno} ${diaSemana} ${a.hora}`;
     
-    return termosBusca.every(t => textoCorpus.includes(t));
+    return matchBusca(textoCorpus, termosBusca);
   });
 
   l.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
@@ -586,43 +703,48 @@ function viewAulas() {
   const optTurnoHtml = (sel = '') => typeof renderPresetSelectOptions === 'function'
     ? renderPresetSelectOptions(turnosList, sel, 'Turno...', true)
     : `<option value="">Turno...</option>` + turnosList.map(v => `<option value="${esc(v)}" ${norm(v) === norm(sel) ? 'selected' : ''}>${esc(v)}</option>`).join('');
-  const gearBtn = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '⚙️', title) : '';
+  const gearBtn = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '\u2699\uFE0E', title) : '';
 
   const aulaEdit = a => {
     const semProf = !a.prof || a.prof.trim() === '' || norm(a.prof) === norm('(sem professor)');
-    const f = (k, ph, listId = '') => `<input class="obs ${a[k] ? '' : 'miss'}" style="margin:0; width:100%;" data-act="ae" data-id="${a.id}" data-f="${k}" ${listId ? `list="${listId}"` : ''} placeholder="${ph}" value="${esc(a[k])}" title="${ph}">`;
-    const bdg = (!a.confirmada && a.destaque) ? `<span class="pill ${a.destaque === 'nova' ? 'o' : 'w'}" style="margin-left:6px">${a.destaque.toUpperCase()}</span>` : '';
-    const alertSemProf = semProf ? `<span class="pill w" style="margin-left:6px; font-size:11px;">⚠️ Definir Professor</span>` : '';
+    const f = (k, ph, listId = '') => `<input class="obs ${a[k] ? '' : 'miss'}" style="margin:0; width:100%;" data-act="ae" data-id="${esc(a.id)}" data-f="${k}" ${listId ? `list="${listId}"` : ''} placeholder="${ph}" value="${esc(a[k])}" title="${ph}">`;
+    const bdg = (!a.confirmada && a.destaque) ? `<span class="pill ${a.destaque === 'nova' ? 'o' : 'w'}" style="margin-left:6px">${esc(String(a.destaque).toUpperCase())}</span>` : '';
+    const alertSemProf = semProf ? `<span class="pill w" style="margin-left:6px; font-size:11px;">⚠\uFE0E Definir Professor</span>` : '';
 
     return `
       <div class="row ${a.confirmada ? 'done' : ''} ${semProf ? 'sem-docente' : ''}" style="align-items:flex-start;">
-        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} style="margin-top:4px" title="Confirmar aula">
+        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} style="margin-top:4px" title="Confirmar aula">
         <div class="t" style="flex:1 1 260px">
           <b>${wd(a.dia)} ${br(a.dia)} ${bdg} ${alertSemProf}</b>
           <div class="aula-grid-inputs">
             ${f('prof', 'Docente / Professor', 'listaProfsQuadro')}
             ${f('turma', 'Turma / Sala', 'listaSalasTurmasQuadro')}
             ${f('hora', 'Horário')}
-            <select class="obs" style="margin:0; width:100%;" data-act="ae_sel" data-id="${a.id}" data-f="turno" title="Turno">
+            <select class="obs" style="margin:0; width:100%;" data-act="ae_sel" data-id="${esc(a.id)}" data-f="turno" title="Turno">
               ${optTurnoHtml(a.turno || '')}
             </select>
             ${f('desc', 'Disciplina / Conteúdo', 'listaDisciplinasQuadro')}
           </div>
         </div>
         <label class="pill ${a.materialPronto ? 'o' : 'w'}" title="Marcar material (slide) como enviado">
-          <input type="checkbox" data-act="tog" data-l="aulas" data-id="${a.id}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''}> 📦 Slide
+          <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''}> Slide
         </label>
-        <button class="b" data-act="del_aula" data-id="${a.id}">Excluir</button>
+        <button class="b" data-act="del_aula" data-id="${esc(a.id)}">Excluir</button>
       </div>
     `;
   };
 
   let searchHtml = `
-    <div class="fx" style="align-items:center;">
-      <input id="buscaAulas" type="search" placeholder="Pesquisar por prof, turma, data (ex: 31/10), horário..." value="${esc(buscaAulas)}" style="flex:2 1 240px;" autocomplete="off">
-      <button class="b" data-act="past">${showPast ? 'Ocultar passadas' : 'Mostrar passadas'}</button>
-      ${buscaAulas.trim() ? `<button class="b" data-act="limpar_busca_aulas">Limpar filtro</button>` : ''}
-      ${temDestaques ? '<button class="b" data-act="limparDestaques">Limpar avisos</button>' : ''}
+    <div class="fx" style="align-items:center; justify-content:space-between;">
+      <div class="mu" style="font-size:12.5px;">
+        ${termosBusca.length
+          ? `Filtrando pela busca global: <b>${l.length}</b> aula(s) encontrada(s)`
+          : `Exibindo <b>${l.length}</b> aula(s) ${showPast ? '(incluindo passadas)' : '(a partir de hoje)'}`}
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="b" data-act="past">${showPast ? 'Ocultar passadas' : 'Mostrar passadas'}</button>
+        ${temDestaques ? '<button class="b" data-act="limparDestaques">Limpar avisos</button>' : ''}
+      </div>
     </div>
     <div id="listaAulas">${l.map(aulaEdit).join('') || '<div class="empty">Nenhuma aula encontrada para esta pesquisa.</div>'}</div>
   `;
@@ -631,25 +753,45 @@ function viewAulas() {
     <datalist id="listaProfsQuadro">${profsOpts.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
     <datalist id="listaSalasTurmasQuadro">${salasTurmasOpts.map(s => `<option value="${esc(s)}">`).join('')}</datalist>
     <datalist id="listaDisciplinasQuadro">${disciplinasList.map(d => `<option value="${esc(d)}">`).join('')}</datalist>
-    <form data-form="aula" id="formNovaAulaAvulsa">
-      <input name="prof" list="listaProfsQuadro" placeholder="Professor" required style="flex:1.5 1 160px;">
-      <div class="preset-field-wrap" style="flex:1.4 1 160px;">
-        <input name="turma" list="listaSalasTurmasQuadro" placeholder="Turma / Sala" required style="flex:1;">
-        ${gearBtn('salas', 'Gerenciar Salas de Aula / Turmas')}
+    <form data-form="aula" id="formNovaAulaAvulsa" class="form-grid-compact" style="margin-bottom:0;">
+      <div class="field-group">
+        <label class="field-label">Professor *</label>
+        <input name="prof" list="listaProfsQuadro" placeholder="Professor" required>
       </div>
-      <div class="preset-field-wrap" style="flex:1 1 130px;">
-        <select name="turno" style="flex:1;" aria-label="Turno">
-          ${optTurnoHtml('')}
-        </select>
-        ${gearBtn('turnos', 'Gerenciar Turnos')}
+      <div class="field-group">
+        <label class="field-label">Turma / Sala *</label>
+        <div class="preset-field-wrap">
+          <input name="turma" list="listaSalasTurmasQuadro" placeholder="Turma / Sala" required>
+          ${gearBtn('salas', 'Gerenciar Salas de Aula / Turmas')}
+        </div>
       </div>
-      <input name="dia" type="date" value="${amanha}" required style="flex:1 1 130px;">
-      <input name="hora" type="time" required style="flex:1 1 105px;">
-      <div class="preset-field-wrap" style="flex:1.8 1 180px;">
-        <input name="desc" list="listaDisciplinasQuadro" placeholder="Disciplina / Conteúdo" style="flex:1;">
-        ${gearBtn('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+      <div class="field-group">
+        <label class="field-label">Turno</label>
+        <div class="preset-field-wrap">
+          <select name="turno" aria-label="Turno">
+            ${optTurnoHtml('')}
+          </select>
+          ${gearBtn('turnos', 'Gerenciar Turnos')}
+        </div>
       </div>
-      <button class="b p" style="white-space:nowrap;">Adicionar</button>
+      <div class="field-group">
+        <label class="field-label">Data *</label>
+        <input name="dia" type="date" value="${amanha}" required>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Horário *</label>
+        <input name="hora" type="time" required>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Disciplina / Conteúdo</label>
+        <div class="preset-field-wrap">
+          <input name="desc" list="listaDisciplinasQuadro" placeholder="Disciplina / Conteúdo">
+          ${gearBtn('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+        </div>
+      </div>
+      <div class="form-actions-cell">
+        <button class="b p" style="white-space:nowrap;">+ Adicionar</button>
+      </div>
     </form>
   `;
 

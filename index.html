@@ -26,18 +26,23 @@
         </div>
       </div>
       <div class="top-search-group">
-        <select id="filtroTipoGlobal" class="top-filter-select" title="Filtrar por tipo" aria-label="Filtrar painel por tipo">
-          <option value="todos">Todos os tipos</option>
-          <option value="aulas">Aulas</option>
-          <option value="operacional">Operacional</option>
-          <option value="orc">Orçamento</option>
-        </select>
-        <div class="top-search-input-wrap">
-          <span class="top-search-icon">🔍</span>
-          <input id="buscaGlobal" placeholder="Buscar no painel..." autocomplete="off">
-          <button id="btnLimparBuscaTop" class="top-search-clear" title="Limpar busca" style="display:none;" data-act="limparBuscaGlobal">✕</button>
+        <div class="global-search-wrapper top-search-input-wrap" id="globalSearchWrapper">
+          <span class="top-search-icon ui-glyph" aria-hidden="true">⌕</span>
+          <input id="buscaGlobal" placeholder="Buscar no painel ou filtrar aba atual..." autocomplete="off">
+          <button id="btnLimparBuscaTop" class="top-search-clear" title="Limpar busca" style="display:none;" data-act="limparBuscaGlobal" type="button" aria-label="Limpar busca">✕</button>
+          <button id="btnToggleSearchFilter" class="search-filter-trigger" type="button" data-act="toggle_search_filter" title="Filtrar resultados" aria-label="Filtrar resultados" aria-haspopup="true" aria-expanded="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span class="search-filter-dot" id="searchFilterDot" aria-hidden="true"></span>
+          </button>
+          <div id="searchFilterPopover" class="search-filter-popover" role="dialog" aria-label="Filtros de busca" style="display:none;"></div>
         </div>
-        <button id="btnOpenSettings" class="b top-settings-btn" data-act="abrir_config_modal" title="Configurações e Sistema" aria-label="Configurações e Sistema">⚙️</button>
+        <div class="sheets-popover-anchor" id="sheetsPopoverAnchor">
+          <button id="btnOpenSheetsMenu" class="b top-sheets-btn" type="button" data-act="toggle_sheets_menu" title="Planilhas de Apoio" aria-label="Planilhas de Apoio" aria-haspopup="true" aria-expanded="false"><span class="ui-glyph" aria-hidden="true">▤</span> Planilhas</button>
+          <div id="sheetsQuickPopover" class="sheets-popover" role="dialog" aria-label="Planilhas de Apoio" style="display:none;"></div>
+        </div>
+        <button id="btnOpenSettings" class="b top-settings-btn" data-act="abrir_config_modal" title="Configurações e Sistema" aria-label="Configurações e Sistema"><span class="ui-glyph" aria-hidden="true">&#9881;&#xFE0E;</span></button>
       </div>
     </div>
     <nav id="nav"></nav>
@@ -50,16 +55,16 @@
     <div class="modal-presets-card modal-settings-card" role="dialog" aria-modal="true" aria-labelledby="modalSettingsTitle">
       <div class="modal-presets-header modal-settings-header">
         <div style="display:flex; align-items:center; gap:9px;">
-          <span style="font-size:18px;">⚙️</span>
+          <span class="ui-glyph" style="font-size:18px;" aria-hidden="true">&#9881;&#xFE0E;</span>
           <b id="modalSettingsTitle" style="font-size:16px; color:var(--tx);">Configurações e Sistema</b>
         </div>
         <button class="x" data-act="fechar_config_modal" title="Fechar (Esc)" aria-label="Fechar configurações" style="font-size:18px;">✕</button>
       </div>
 
       <div class="modal-settings-tabs" role="tablist" aria-label="Abas de configurações">
-        <button type="button" class="modal-settings-tab active" data-act="settings_tab" data-tab="geral" role="tab" aria-selected="true">⚙️ Geral</button>
-        <button type="button" class="modal-settings-tab" data-act="settings_tab" data-tab="presets" role="tab" aria-selected="false">🧩 Predefinições</button>
-        <button type="button" class="modal-settings-tab" data-act="settings_tab" data-tab="professores" role="tab" aria-selected="false">👥 Gestão de Professores</button>
+        <button type="button" class="modal-settings-tab active" data-act="settings_tab" data-tab="geral" role="tab" aria-selected="true"><span class="ui-glyph" aria-hidden="true">&#9881;&#xFE0E;</span> Geral</button>
+        <button type="button" class="modal-settings-tab" data-act="settings_tab" data-tab="presets" role="tab" aria-selected="false">Predefinições</button>
+        <button type="button" class="modal-settings-tab" data-act="settings_tab" data-tab="professores" role="tab" aria-selected="false">Gestão de Professores</button>
       </div>
 
       <div class="modal-settings-body">
@@ -70,7 +75,7 @@
         <div id="settingsTabPanelPresets" class="modal-settings-panel" data-settings-panel="presets" style="display:none;">
           <div class="modal-presets-tabs modal-presets-subtabs" role="tablist" aria-label="Categorias de predefinições">
             <button type="button" class="modal-presets-tab active" data-act="preset_tab" data-tab="reparos">Reparos</button>
-            <button type="button" class="modal-presets-tab" data-act="preset_tab" data-tab="professores">Professores / Controle</button>
+            <button type="button" class="modal-presets-tab" data-act="preset_tab" data-tab="operacao">Operação / Controle</button>
             <button type="button" class="modal-presets-tab" data-act="preset_tab" data-tab="orcamentos">Orçamentos</button>
             <button type="button" class="modal-presets-tab" data-act="preset_tab" data-tab="notas">Notas</button>
           </div>
@@ -100,7 +105,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Scripts Modulares do Painel Prius -->
+  <!-- Scripts Modulares do ARGOS OPS -->
   <script src="core.js"></script>
   <script src="presets.js"></script>
   <script src="orcamento.js"></script>

@@ -18,7 +18,9 @@ export default defineConfig({
       name: 'copy-scripts',
       generateBundle() {
         const scripts = [
+          'style.css',
           'core.js',
+          'presets.js',
           'hoje.js',
           'aulas.js',
           'operacional.js',

@@ -104,12 +104,12 @@
       <div style="background: var(--card, #1c1d22); border: 1px solid var(--bd, #2d2f36); border-radius: 14px; padding: 16px 18px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.65); width: fit-content; max-width: 96vw; max-height: 96vh; display: flex; flex-direction: column; align-items: center; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 12px; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <b style="color: var(--ac, #f59e0b); font-size: 18px;">🐍 Snake ARGOS OPS Arena</b>
-            <span id="snakeModoBadge" class="pill" style="font-size: 11px; padding: 2px 9px;">⏳ Conectando...</span>
+            <b style="color: var(--ac, #f59e0b); font-size: 18px;">Snake ARGOS OPS Arena</b>
+            <span id="snakeModoBadge" class="pill" style="font-size: 11px; padding: 2px 9px;">● Conectando...</span>
             <span id="snakeRoundStatus" style="font-size: 12px; color: var(--mu, #9ca3af); font-weight: 500;"></span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
-            <button id="btnReiniciarSnake" class="b p" disabled style="font-size: 12px; padding: 5px 11px; opacity: 0.42; cursor: not-allowed;">🔄 Reiniciar</button>
+            <button id="btnReiniciarSnake" class="b p" disabled style="font-size: 12px; padding: 5px 11px; opacity: 0.42; cursor: not-allowed;">↻ Reiniciar</button>
             <button id="btnFecharSnake" class="x" style="padding: 2px 8px; font-size: 18px; cursor: pointer;" title="Fechar (Esc)">✕</button>
           </div>
         </div>
@@ -120,17 +120,17 @@
           <canvas id="canvasSnake" width="800" height="800" style="background: #111215; border: 2px solid var(--bd, #2d2f36); border-radius: 10px; display: block; width: min(74vh, 92vw, 800px); height: min(74vh, 92vw, 800px); max-width: 92vw; max-height: 74vh; aspect-ratio: 1/1;"></canvas>
 
           <div id="snakeEliminadoBanner" style="display: none; position: absolute; top: 10px; right: 10px; background: rgba(17, 18, 21, 0.9); border: 1px solid rgba(239, 68, 68, 0.45); color: #fca5a5; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,0.45); max-width: 82%; text-align: left;">
-            💀 Você foi eliminado! Aguardando os outros jogadores terminarem...
+            ⚠\uFE0E Você foi eliminado! Aguardando os outros jogadores terminarem...
           </div>
 
           <div id="snakeEspectadorBanner" style="display: none; position: absolute; top: 10px; left: 10px; background: rgba(17, 18, 21, 0.9); border: 1px solid rgba(56, 189, 248, 0.45); color: #bae6fd; padding: 6px 11px; border-radius: 8px; font-size: 12px; font-weight: 600; pointer-events: none;">
-            👀 Sala cheia (3/3) — Modo Espectador
+            Sala cheia (3/3) — Modo Espectador
           </div>
 
           <div id="snakeOverlayGameOver" style="display: none; position: absolute; inset: 0; background: rgba(10, 11, 14, 0.84); backdrop-filter: blur(3px); border-radius: 10px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; box-sizing: border-box;">
-            <span style="color: #f59e0b; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">🏁 Fim de Rodada!</span>
+            <span style="color: #f59e0b; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">Fim de Rodada!</span>
             <div id="snakeRankingFinal" style="width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 6px;"></div>
-            <button id="btnTentarNovamenteSnake" class="b p" style="font-size: 14px; padding: 9px 20px; font-weight: 700; cursor: pointer; margin-top: 4px;">🔄 Nova Rodada (Espaço)</button>
+            <button id="btnTentarNovamenteSnake" class="b p" style="font-size: 14px; padding: 9px 20px; font-weight: 700; cursor: pointer; margin-top: 4px;">↻ Nova Rodada (Espaço)</button>
           </div>
         </div>
 
@@ -427,13 +427,13 @@
 
       if (modoBadgeEl) {
         if (!modoMultiplayer) {
-          modoBadgeEl.textContent = '👤 Modo Solo';
+          modoBadgeEl.textContent = '● Modo Solo';
           modoBadgeEl.className = 'pill w';
         } else if (mySlot === 0) {
-          modoBadgeEl.textContent = `👀 Espectador (${ativos.length}/3)`;
+          modoBadgeEl.textContent = `○ Espectador (${ativos.length}/3)`;
           modoBadgeEl.className = 'pill b';
         } else {
-          modoBadgeEl.textContent = `☁️ Online • ${ativos.length}/3`;
+          modoBadgeEl.textContent = `☁\uFE0E Online • ${ativos.length}/3`;
           modoBadgeEl.className = 'pill o';
         }
       }
@@ -451,7 +451,7 @@
         btnReiniciar.disabled = bloqueado;
         btnReiniciar.style.opacity = bloqueado ? '0.42' : '1';
         btnReiniciar.style.cursor = bloqueado ? 'not-allowed' : 'pointer';
-        btnReiniciar.textContent = bloqueado ? '🔄 Reiniciar' : '🔄 Nova Rodada';
+        btnReiniciar.textContent = bloqueado ? '↻ Reiniciar' : '↻ Nova Rodada';
       }
 
       if (roundStatusEl) {
@@ -467,7 +467,7 @@
       if (scoreboardEl) {
         scoreboardEl.innerHTML = ativos.map(p => {
           const cor = SLOT_CORES[p.slot] || SLOT_CORES[1];
-          const statusTxt = p.alive ? '🟢 Jogando' : '💀 Eliminado';
+          const statusTxt = p.alive ? '● Jogando' : '✕ Eliminado';
           const rotulo = p.isLocal ? `${cor.nome} (Você)` : cor.nome;
           const borda = p.isLocal ? `border-color: ${cor.head}; box-shadow: 0 0 0 1px ${cor.head}44;` : '';
           return `
@@ -484,7 +484,7 @@
       if (overlayGameOver && rankingFinalEl) {
         if (todosEliminados) {
           const ranking = [...ativos].sort((a, b) => b.score - a.score || a.slot - b.slot);
-          const medalhas = ['🥇', '🥈', '🥉'];
+          const medalhas = ['1º', '2º', '3º'];
           rankingFinalEl.innerHTML = ranking.map((p, idx) => {
             const cor = SLOT_CORES[p.slot] || SLOT_CORES[1];
             const rotulo = p.isLocal ? `${cor.nome} (Você)` : cor.nome;

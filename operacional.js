@@ -1,6 +1,6 @@
 /* ========================================================
    OPERACIONAL.JS - RECIBOS, REPAROS, RESUMOS E APELIDOS
-   Painel Operacional Prius
+   ARGOS OPS
 ======================================================== */
 
 // Estado local do conversor de imagens
@@ -73,7 +73,7 @@ function gerarResumoOperacional(tipo) {
     confHoje.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
 
     const confTxt = confHoje.length
-      ? confHoje.map(a => `  • ${a.prof || 'Sem prof'} — ${a.turma} (${wd(a.dia)} ${br(a.dia)} às ${a.hora || 'S/H'}) [${a.confirmada ? '✅ Confirmada' : '⏳ Pendente'}]`).join('\n')
+      ? confHoje.map(a => `  • ${a.prof || 'Sem prof'} — ${a.turma} (${wd(a.dia)} ${br(a.dia)} às ${a.hora || 'S/H'}) [${a.confirmada ? '✓ Confirmada' : '◷ Pendente'}]`).join('\n')
       : '  • Nenhuma aula para confirmar hoje.';
 
     const repTxt = repPend.length
@@ -83,13 +83,13 @@ function gerarResumoOperacional(tipo) {
     const G = groups(mon(0), addD(mon(0), 6));
     const docsPendQtd = docPend(G);
 
-    let msg = `*☀️ BRIEFING OPERACIONAL — ${br(hoje)} (${wd(hoje).toUpperCase()})*\n\n`;
-    msg += `📄 *Recibos Pendentes (Semana Atual):* ${docsPendQtd} pendência(s)\n`;
-    msg += `📅 *Confirmações de Aula:*\n${confTxt}\n\n`;
-    msg += `🛠️ *Manutenções Pendentes (${repPend.length}):*\n${repTxt}\n\n`;
-    msg += `📄 *Docs Pendentes (Semana Atual):* ${docsPendQtd} contrato(s)/recibo(s)\n`;
+    let msg = `*☀\uFE0E ARGOS OPS • BRIEFING OPERACIONAL — ${br(hoje)} (${wd(hoje).toUpperCase()})*\n\n`;
+    msg += `▪ *Recibos Pendentes (Semana Atual):* ${docsPendQtd} pendência(s)\n`;
+    msg += `▪ *Confirmações de Aula:*\n${confTxt}\n\n`;
+    msg += `▪ *Manutenções Pendentes (${repPend.length}):*\n${repTxt}\n\n`;
+    msg += `▪ *Docs Pendentes (Semana Atual):* ${docsPendQtd} contrato(s)/recibo(s)\n`;
     if (orcAguardando.length) {
-      msg += `💰 *Orçamentos Aguardando Aprovação:* ${orcAguardando.length} fornecedor(es)\n`;
+      msg += `▪ *Orçamentos Aguardando Aprovação:* ${orcAguardando.length} fornecedor(es)\n`;
     }
     return msg;
   }
@@ -118,15 +118,15 @@ function gerarResumoOperacional(tipo) {
   const G_periodo = groups(hoje, dataFim);
   const docsPendQtd = docPend(G_periodo);
 
-  let msg = `*📊 RESUMO OPERACIONAL COMPILADO ${tituloPeriodo}*\n`;
-  msg += `🗓️ *Período:* ${br(hoje)} a ${br(dataFim)} (${nDias} dias)\n\n`;
-  msg += `📚 *Quadro de Aulas (${aulasPeriodo.length} aulas agendadas):*\n${turmasLista}\n\n`;
-  msg += `📦 *Envios de Materiais (Slides):* ${matsPrevistos.length} previsto(s) (${matsPendentesQtd} pendente(s))\n`;
-  msg += `📄 *Recibos e Aprovações:* ${G_periodo.length} grupo(s) de docentes (${docsPendQtd} pendência(s))\n`;
-  msg += `🛠️ *Manutenções:* ${repPend.length} chamado(s) em aberto\n`;
+  let msg = `*▤ ARGOS OPS • RESUMO OPERACIONAL COMPILADO ${tituloPeriodo}*\n`;
+  msg += `▪ *Período:* ${br(hoje)} a ${br(dataFim)} (${nDias} dias)\n\n`;
+  msg += `▪ *Quadro de Aulas (${aulasPeriodo.length} aulas agendadas):*\n${turmasLista}\n\n`;
+  msg += `▪ *Envios de Materiais (Slides):* ${matsPrevistos.length} previsto(s) (${matsPendentesQtd} pendente(s))\n`;
+  msg += `▪ *Recibos e Aprovações:* ${G_periodo.length} grupo(s) de docentes (${docsPendQtd} pendência(s))\n`;
+  msg += `▪ *Manutenções:* ${repPend.length} chamado(s) em aberto\n`;
 
   if (S.orc.titulo) {
-    msg += `💰 *Cotação Atual:* ${S.orc.titulo} (${S.orc.itens.length} fornecedores)\n`;
+    msg += `▪ *Cotação Atual:* ${S.orc.titulo} (${S.orc.itens.length} fornecedores)\n`;
   }
   return msg;
 }
@@ -172,7 +172,7 @@ function analisarApelido(nome, alts) {
     return {
       ok: false,
       motivo: 'conflito_nome',
-      msg: `⚠️ "${nomeLimpo}" já está vinculado como apelido de "${nomeComoApelido.nome}". Desfaça o vínculo anterior primeiro.`
+      msg: `⚠\uFE0E "${nomeLimpo}" já está vinculado como apelido de "${nomeComoApelido.nome}". Desfaça o vínculo anterior primeiro.`
     };
   }
 
@@ -183,7 +183,7 @@ function analisarApelido(nome, alts) {
       return {
         ok: false,
         motivo: 'conflito_alt',
-        msg: `⚠️ O apelido "${alt}" já está cadastrado como professor oficial ("${outroOficial.nome}"). Desfaça o vínculo anterior primeiro.`
+        msg: `⚠\uFE0E O apelido "${alt}" já está cadastrado como professor oficial ("${outroOficial.nome}"). Desfaça o vínculo anterior primeiro.`
       };
     }
     const outroVinculo = lista.find(x => x !== oficialExistente && (x.alts || []).some(a => norm(a) === nAlt));
@@ -191,7 +191,7 @@ function analisarApelido(nome, alts) {
       return {
         ok: false,
         motivo: 'conflito_alt',
-        msg: `⚠️ O apelido "${alt}" já está vinculado a "${outroVinculo.nome}". Desfaça o vínculo anterior primeiro.`
+        msg: `⚠\uFE0E O apelido "${alt}" já está vinculado a "${outroVinculo.nome}". Desfaça o vínculo anterior primeiro.`
       };
     }
   }
@@ -202,13 +202,13 @@ function analisarApelido(nome, alts) {
         ok: false,
         motivo: 'info_oficial',
         existente: oficialExistente,
-        msg: `ℹ️ "${oficialExistente.nome}" já está na lista (${(oficialExistente.alts || []).length} apelido(s)). Informe novos apelidos para mesclar.`
+        msg: `ℹ\uFE0E "${oficialExistente.nome}" já está na lista (${(oficialExistente.alts || []).length} apelido(s)). Informe novos apelidos para mesclar.`
       };
     }
     return {
       ok: false,
       motivo: 'vazio',
-      msg: '⚠️ Informe o nome oficial e pelo menos um outro nome diferente.'
+      msg: '⚠\uFE0E Informe o nome oficial e pelo menos um outro nome diferente.'
     };
   }
 
@@ -218,7 +218,7 @@ function analisarApelido(nome, alts) {
       return {
         ok: false,
         motivo: 'duplicado',
-        msg: '⚠️ Este nome e apelido(s) já estão cadastrados!'
+        msg: '⚠\uFE0E Este nome e apelido(s) já estão cadastrados!'
       };
     }
     return {
@@ -263,7 +263,7 @@ function addApelido(nome, alts) {
       ok: true,
       motivo: 'mesclado',
       nome: entry.nome,
-      msg: `ℹ️ "${entry.nome}" já estava na lista — novos apelidos foram mesclados!`
+      msg: `ℹ\uFE0E "${entry.nome}" já estava na lista — novos apelidos foram mesclados!`
     };
   }
 
@@ -271,7 +271,7 @@ function addApelido(nome, alts) {
     ok: true,
     motivo: 'criado',
     nome: entry.nome,
-    msg: `✅ Nomes unidos para "${entry.nome}"!`
+    msg: `✓ Nomes unidos para "${entry.nome}"!`
   };
 }
 
@@ -296,8 +296,8 @@ function salvarProfPerfil(nome, disciplina = '', turno = '', sala = '') {
   if (!nomeLimpo) return false;
   const canon = typeof profCanon === 'function' ? profCanon(nomeLimpo) : nomeLimpo;
   const key = norm(canon);
-  if (!key) return false;
-  S.profPerfis = (S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {};
+  if (!key || key === '__proto__' || key === 'constructor' || key === 'prototype') return false;
+  S.profPerfis = (S.profPerfis && typeof S.profPerfis === 'object' && !Array.isArray(S.profPerfis)) ? S.profPerfis : {};
   const atual = S.profPerfis[key] || { nome: canon, disciplina: '', turno: '', sala: '' };
   S.profPerfis[key] = {
     nome: canon,
@@ -347,43 +347,95 @@ function cardApelidos() {
   const optHtml = (list, sel, ph) => typeof renderPresetSelectOptions === 'function'
     ? renderPresetSelectOptions(list, sel, ph, true)
     : `<option value="">${esc(ph)}</option>` + list.map(v => `<option value="${esc(v)}" ${norm(v) === norm(sel) ? 'selected' : ''}>${esc(v)}</option>`).join('');
-  const gear = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '⚙️', title) : '';
+  const gear = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '\u2699\uFE0E', title) : '';
 
   const aberto = typeof apelidosAberto !== 'undefined' ? apelidosAberto : false;
 
-  let h = `
-    <div style="margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--bd);">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-        <h3 style="margin:0;">📋 Ficha de Professores (Disciplina / Área, Turno & Sala)</h3>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          ${gear('disciplinas', 'Gerenciar Disciplinas / Áreas')}
-          ${gear('turnos', 'Gerenciar Turnos')}
-          ${gear('salas', 'Gerenciar Salas de Aula / Turmas')}
+  const profSchema = typeof PROF_PRESET_SCHEMA !== 'undefined' ? PROF_PRESET_SCHEMA : [
+    { key: 'disciplinas', label: 'Disciplinas / Áreas', placeholder: 'Nova disciplina / área de atuação...' },
+    { key: 'turnos', label: 'Turnos', placeholder: 'Novo turno (ex: Manhã, Sábado)...' },
+    { key: 'salas', label: 'Salas de Aula / Turmas', placeholder: 'Nova sala ou turma padrão...' }
+  ];
+  const profSubAtiva = (typeof profPresetSubAtual === 'string' && profSchema.some(s => s.key === profPresetSubAtual))
+    ? profPresetSubAtual
+    : profSchema[0].key;
+  const profSubObj = profSchema.find(s => s.key === profSubAtiva) || profSchema[0];
+  const profItensAtivos = typeof getPresetList === 'function' ? getPresetList('professores', profSubAtiva) : [];
+
+  let blocoProfPresets = `
+    <div class="prof-presets-panel">
+      <div class="prof-presets-head">
+        <div>
+          <h3 style="margin:0;"><span class="ui-glyph" aria-hidden="true">\u2699\uFE0E</span> Disciplinas, Turnos & Salas / Turmas</h3>
+          <div class="mu" style="font-size:12px;">Gerencie aqui as opções usadas nas fichas de professores e no lançamento de aulas.</div>
         </div>
       </div>
+      <div class="prof-presets-tabs" role="tablist" aria-label="Listas de professores">
+        ${profSchema.map(sub => {
+          const qtd = typeof getPresetList === 'function' ? getPresetList('professores', sub.key).length : 0;
+          const ativo = sub.key === profSubAtiva;
+          return `<button type="button" class="prof-presets-tab ${ativo ? 'active' : ''}" data-act="prof_preset_tab" data-sub="${esc(sub.key)}" role="tab" aria-selected="${ativo}">${esc(sub.label)} (${qtd})</button>`;
+        }).join('')}
+      </div>
+      <form data-form="prof_preset_add" class="prof-presets-form">
+        <input type="hidden" name="sub" value="${esc(profSubAtiva)}">
+        <input id="profPresetInputNome" name="nome" placeholder="${esc(profSubObj.placeholder || 'Nova opção...')}" required autocomplete="off">
+        <button type="submit" class="b p" style="white-space:nowrap;">+ Adicionar</button>
+      </form>
+      <div class="prof-presets-chips">
+        ${profItensAtivos.map(item => {
+          const val = typeof item === 'string' ? item : (item && item.nome ? item.nome : '');
+          return `
+            <div class="preset-chip">
+              <span>${esc(val)}</span>
+              <button type="button" class="preset-chip-del" data-act="preset_del" data-cat="professores" data-sub="${esc(profSubAtiva)}" data-val="${esc(val)}" title="Remover">×</button>
+            </div>
+          `;
+        }).join('') || '<span class="mu" style="font-size:12px; font-style:italic;">Nenhuma opção cadastrada nesta lista.</span>'}
+      </div>
+    </div>
+  `;
+
+  let h = blocoProfPresets + `
+    <div style="margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--bd);">
+      <h3 style="margin:0 0 6px;">Ficha de Professores (Disciplina / Área, Turno & Sala)</h3>
       <div class="mu" style="margin-bottom:10px; font-size:12.5px;">Vincule área de atuação/disciplina, turno e sala ou turma padrão para cada docente.</div>
       <datalist id="profsFichaList">${nomes.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
-      <form data-form="prof_perfil" class="prof-ficha-form">
-        <input name="nome" list="profsFichaList" placeholder="Nome do professor(a)..." required autocomplete="off" style="flex:2 1 180px;">
-        <div class="preset-field-wrap" style="flex:1.5 1 170px;">
-          <select name="disciplina" style="flex:1;" aria-label="Disciplina ou área de atuação">
-            ${optHtml(disciplinasList, '', 'Disciplina / Área...')}
-          </select>
-          ${gear('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+      <form data-form="prof_perfil" class="prof-ficha-form form-grid-compact">
+        <div class="field-group">
+          <label class="field-label">Professor(a)</label>
+          <input name="nome" list="profsFichaList" placeholder="Nome do professor(a)..." required autocomplete="off">
         </div>
-        <div class="preset-field-wrap" style="flex:1 1 130px;">
-          <select name="turno" style="flex:1;" aria-label="Turno">
-            ${optHtml(turnosList, '', 'Turno...')}
-          </select>
-          ${gear('turnos', 'Gerenciar Turnos')}
+        <div class="field-group">
+          <label class="field-label">Disciplina / Área</label>
+          <div class="preset-field-wrap">
+            <select name="disciplina" aria-label="Disciplina ou área de atuação">
+              ${optHtml(disciplinasList, '', 'Disciplina / Área...')}
+            </select>
+            ${gear('disciplinas', 'Gerenciar Disciplinas / Áreas')}
+          </div>
         </div>
-        <div class="preset-field-wrap" style="flex:1.2 1 150px;">
-          <select name="sala" style="flex:1;" aria-label="Sala ou turma padrão">
-            ${optHtml(salasList, '', 'Sala / Turma...')}
-          </select>
-          ${gear('salas', 'Gerenciar Salas / Turmas')}
+        <div class="field-group">
+          <label class="field-label">Turno</label>
+          <div class="preset-field-wrap">
+            <select name="turno" aria-label="Turno">
+              ${optHtml(turnosList, '', 'Turno...')}
+            </select>
+            ${gear('turnos', 'Gerenciar Turnos')}
+          </div>
         </div>
-        <button class="b p" style="white-space:nowrap;">💾 Salvar Ficha</button>
+        <div class="field-group">
+          <label class="field-label">Sala / Turma padrão</label>
+          <div class="preset-field-wrap">
+            <select name="sala" aria-label="Sala ou turma padrão">
+              ${optHtml(salasList, '', 'Sala / Turma...')}
+            </select>
+            ${gear('salas', 'Gerenciar Salas / Turmas')}
+          </div>
+        </div>
+        <div class="form-actions-cell">
+          <button class="b p" style="white-space:nowrap;"><span class="ui-glyph" aria-hidden="true">✓</span> Salvar Ficha</button>
+        </div>
       </form>
       <div style="margin-top:10px;">
         ${perfisOrd.map(([key, p]) => `
@@ -418,10 +470,18 @@ function cardApelidos() {
   h += `
     <h3>Unir manualmente</h3>
     <datalist id="profsL">${optionsDatalist}</datalist>
-    <form data-form="apelido" id="formApelido">
-      <input name="nome" id="inpApNome" list="profsL" placeholder="Nome que vale (oficial)" required autocomplete="off" style="flex:2 1 200px">
-      <input name="alts" id="inpApAlts" placeholder="Outros nomes, separados por vírgula" required autocomplete="off" style="flex:2 1 200px">
-      <button class="b p">Unir</button>
+    <form data-form="apelido" id="formApelido" class="form-grid-compact">
+      <div class="field-group">
+        <label class="field-label" for="inpApNome">Nome oficial</label>
+        <input name="nome" id="inpApNome" list="profsL" placeholder="Nome que vale (oficial)" required autocomplete="off">
+      </div>
+      <div class="field-group span-2-desktop">
+        <label class="field-label" for="inpApAlts">Outros nomes / variações</label>
+        <input name="alts" id="inpApAlts" placeholder="Outros nomes, separados por vírgula" required autocomplete="off">
+      </div>
+      <div class="form-actions-cell">
+        <button class="b p">Unir</button>
+      </div>
     </form>
     <div id="avisoApelidoForm" class="ap-form-aviso" style="display:none;"></div>
   `;
@@ -441,7 +501,7 @@ function cardApelidos() {
     <div class="settings-professores-section">
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <h2 style="margin:0;">👥 Gestão de Professores (Fichas & Apelidos)</h2>
+          <h2 style="margin:0;">Gestão de Professores (Fichas & Apelidos)</h2>
           <span class="pill ${perfisOrd.length > 0 ? 'o' : ''}">${perfisOrd.length} ficha(s)</span>
           <span class="pill ${apOrd.length > 0 ? 'o' : ''}">${apOrd.length} unido(s)</span>
           ${badgeSug}
@@ -475,7 +535,7 @@ async function baixarPlanilhaResumo(tipo) {
   const G_periodo = groups(hoje, dataFim);
 
   if (typeof window.ExcelJS === 'undefined') {
-    let csv = `\uFEFFDETALHAMENTO DE AULAS - ${rotuloPeriodo}\n\n`;
+    let csv = `\uFEFFARGOS OPS — DETALHAMENTO DE AULAS - ${rotuloPeriodo}\n\n`;
     csv += 'Data;Dia da Semana;Horário;Turma;Professor;Disciplina;Confirmação de Aula;Material (Slides)\n';
     aulasPeriodo.forEach(a => {
       csv += `"${br(a.dia)}";"${wd(a.dia)}";"${a.hora || ''}";"${(a.turma || '').replace(/"/g, '""')}";"${(a.prof || '').replace(/"/g, '""')}";"${(a.desc || '').replace(/"/g, '""')}";"${a.confirmada ? 'Confirmada' : 'Pendente'}";"${a.materialPronto ? 'Pronto' : 'Pendente'}"\n`;
@@ -617,21 +677,21 @@ async function baixarPlanilhaResumo(tipo) {
       },
       {
         rangeLabel: 'C4:D4', rangeVal: 'C5:D5',
-        label: '✅ AULAS CONFIRMADAS',
+        label: '✓ AULAS CONFIRMADAS',
         formula: aulasPeriodo.length ? `COUNTIF(G${firstAulaRow}:G${lastAulaRow},"Confirmada")` : '0',
         result: qtdConf,
         bg: C_EMERALD_BG, labelColor: C_EMERALD_TX, valColor: C_EMERALD_TX
       },
       {
         rangeLabel: 'E4:F4', rangeVal: 'E5:F5',
-        label: '📦 MATERIAIS PRONTOS',
+        label: '▪ MATERIAIS PRONTOS',
         formula: aulasPeriodo.length ? `COUNTIF(H${firstAulaRow}:H${lastAulaRow},"Pronto")` : '0',
         result: qtdMatOk,
         bg: C_BLUE_BG, labelColor: C_BLUE_TX, valColor: C_BLUE_TX
       },
       {
         rangeLabel: 'G4:I4', rangeVal: 'G5:I5',
-        label: '⏳ PENDÊNCIAS (AULAS + SLIDES)',
+        label: '◷ PENDÊNCIAS (AULAS + SLIDES)',
         formula: aulasPeriodo.length ? `COUNTIF(G${firstAulaRow}:G${lastAulaRow},"Pendente")+COUNTIF(H${firstAulaRow}:H${lastAulaRow},"Pendente")` : '0',
         result: qtdPendGeral,
         bg: C_AMBER_BG, labelColor: C_AMBER_TX, valColor: C_AMBER_TX
@@ -970,10 +1030,9 @@ async function baixarPlanilhaResumo(tipo) {
         }
         row.getCell(6).value = i.status || 'Aguardando aprovação';
 
-        const isUrl = /^(https?:\/\/|www\.)/i.test(urlCompra) || (dom && dom !== 'link' && urlCompra.includes('.'));
-        if (urlCompra && isUrl) {
-          const fullUrl = /^https?:\/\//i.test(urlCompra) ? urlCompra : 'https://' + urlCompra;
-          row.getCell(7).value = { text: dom ? `🔗 ${dom}` : urlCompra, hyperlink: fullUrl };
+        const fullUrl = typeof safeHttpUrl === 'function' ? safeHttpUrl(urlCompra) : '';
+        if (urlCompra && fullUrl) {
+          row.getCell(7).value = { text: dom ? `↗ ${dom}` : urlCompra, hyperlink: fullUrl };
         } else {
           row.getCell(7).value = urlCompra || '—';
         }
@@ -990,7 +1049,7 @@ async function baixarPlanilhaResumo(tipo) {
           if (c === 6) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C_AMBER_PILL } };
             cell.font = { name: FONT_NAME, size: 9.5, bold: true, color: { argb: C_AMBER_TX } };
-          } else if (c === 7 && urlCompra && isUrl) {
+          } else if (c === 7 && urlCompra && fullUrl) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
             cell.font = { name: FONT_NAME, size: 10, underline: true, color: { argb: 'FF2563EB' } };
           } else {
@@ -1027,15 +1086,22 @@ async function baixarPlanilhaResumo(tipo) {
 function viewOperacional() {
   const subNav = `
     <div class="fx" style="gap:6px; margin-bottom:12px;">
-      <button class="b ${subTabSemana === 'docs' ? 'p' : ''}" data-act="sub_semana" data-v="docs">📄 Recibos e Envios</button>        
-      <button class="b ${subTabSemana === 'reparos' ? 'p' : ''}" data-act="sub_semana" data-v="reparos">🛠️ Manutenções e Reparos</button>
-      <button class="b ${subTabSemana === 'resumos' ? 'p' : ''}" data-act="sub_semana" data-v="resumos">📊 Resumos Operacionais</button>
-      <button class="b ${subTabSemana === 'conversor' ? 'p' : ''}" data-act="sub_semana" data-v="conversor">🖼️ Converter Imagens</button>
+      <button class="b ${subTabSemana === 'docs' ? 'p' : ''}" data-act="sub_semana" data-v="docs">Recibos e Envios</button>        
+      <button class="b ${subTabSemana === 'reparos' ? 'p' : ''}" data-act="sub_semana" data-v="reparos">Manutenções e Reparos</button>
+      <button class="b ${subTabSemana === 'resumos' ? 'p' : ''}" data-act="sub_semana" data-v="resumos">Resumos Operacionais</button>
+      <button class="b ${subTabSemana === 'conversor' ? 'p' : ''}" data-act="sub_semana" data-v="conversor">Converter Imagens</button>
     </div>
   `;
 
   if (subTabSemana === 'reparos') {
-    const reparosFiltrados = S.reparos.filter(r => (repFiltro === 'abertos' ? r.status !== 'Concluído' : (repFiltro === 'concluidos' ? r.status === 'Concluído' : true)));
+    const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
+    const reparosFiltrados = S.reparos.filter(r => {
+      const okFiltro = repFiltro === 'abertos' ? r.status !== 'Concluído' : (repFiltro === 'concluidos' ? r.status === 'Concluído' : true);
+      if (!okFiltro) return false;
+      if (!termosBusca.length) return true;
+      const diaReg = typeof br === 'function' ? br(r.dataReg) : r.dataReg;
+      return matchBusca(`${r.item} ${r.local} ${r.resp} ${r.obs} ${r.status} ${diaReg}`, termosBusca);
+    });
     
     const reparoRowFull = r => `
       <div class="row ${r.status === 'Concluído' ? 'done' : ''}">
@@ -1045,39 +1111,53 @@ function viewOperacional() {
             <b>${esc(r.item)}</b>
             <span class="${r.status === 'Concluído' ? 'pill o' : 'pill w'}">${esc(r.status)}</span>
           </div>
-          <input class="obs" data-act="rep_obs" data-id="${r.id}" placeholder="Observações" value="${esc(r.obs || '')}">
+          <input class="obs" data-act="rep_obs" data-id="${esc(r.id)}" placeholder="Observações" value="${esc(r.obs || '')}">
         </div>
-        <select data-act="rep_st" data-id="${r.id}">
+        <select data-act="rep_st" data-id="${esc(r.id)}">
           <option value="Pendente" ${r.status === 'Pendente' ? 'selected' : ''}>Pendente</option>
           <option value="Em andamento" ${r.status === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
           <option value="Concluído" ${r.status === 'Concluído' ? 'selected' : ''}>Concluído</option>
         </select>
-        <button class="b" data-act="del_reparo" data-id="${r.id}">Excluir</button>
+        <button class="b" data-act="del_reparo" data-id="${esc(r.id)}">Excluir</button>
       </div>
     `;
 
     let locaisOpts = typeof getPresetList === 'function' ? getPresetList('reparos', 'locais') : LOCAIS_MANUTENCAO;
-    let repFormHtml = `
-      <form data-form="reparo">
-        <div style="display:flex; align-items:center; flex:1 1 180px; gap:4px;">
-          <select name="local" required style="flex:1;">
-            <option value="">Selecione o local...</option>
-            ${locaisOpts.map(loc => `<option value="${esc(loc)}">${esc(loc)}</option>`).join('')}
-          </select>
-          ${typeof presetGearBtn === 'function' ? presetGearBtn('reparos', 'locais') : ''}
+    let repFormCardHtml = `
+      <form data-form="reparo" class="form-grid-compact" style="margin-bottom:0;">
+        <div class="field-group">
+          <label class="field-label" for="repLocalSelect">Local / Ambiente</label>
+          <div class="preset-field-wrap">
+            <select id="repLocalSelect" name="local" required>
+              <option value="">Selecione o local...</option>
+              ${locaisOpts.map(loc => `<option value="${esc(loc)}">${esc(loc)}</option>`).join('')}
+            </select>
+            ${typeof presetGearBtn === 'function' ? presetGearBtn('reparos', 'locais') : ''}
+          </div>
         </div>
-        <input name="item" placeholder="Problema (ex: Lâmpada queimada, tomada sem energia)" required style="flex:2 1 220px">
-        <button class="b p">Adicionar Chamado</button>
-        <button type="button" class="b" data-act="rel">📋 Copiar Relatório</button>
+        <div class="field-group span-2-desktop">
+          <label class="field-label" for="repItemInput">Problema / Descrição do Chamado</label>
+          <input id="repItemInput" name="item" placeholder="Ex: Lâmpada queimada, tomada sem energia" required>
+        </div>
+        <div class="form-actions-cell">
+          <button class="b p" style="white-space:nowrap;">+ Adicionar Chamado</button>
+          <button type="button" class="b" data-act="rel" style="white-space:nowrap;"><span class="ui-glyph" aria-hidden="true">≡</span> Copiar Relatório</button>
+        </div>
       </form>
-      <div class="fx" style="margin-top:8px;">
-        <button class="b ${repFiltro === 'abertos' ? 'p' : ''}" data-act="repf" data-v="abertos">Abertos</button>
-        <button class="b ${repFiltro === 'concluidos' ? 'p' : ''}" data-act="repf" data-v="concluidos">Concluídos</button>
-        <button class="b ${repFiltro === 'todos' ? 'p' : ''}" data-act="repf" data-v="todos">Todos</button>
+    `;
+
+    let repListaHtml = `
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+        <h2 style="margin:0;">Chamados e Manutenções (${reparosFiltrados.length})</h2>
+        <div class="fx" style="margin-bottom:0;">
+          <button class="b ${repFiltro === 'abertos' ? 'p' : ''}" data-act="repf" data-v="abertos">Abertos</button>
+          <button class="b ${repFiltro === 'concluidos' ? 'p' : ''}" data-act="repf" data-v="concluidos">Concluídos</button>
+          <button class="b ${repFiltro === 'todos' ? 'p' : ''}" data-act="repf" data-v="todos">Todos</button>
+        </div>
       </div>
       <div id="listaReparos">${reparosFiltrados.map(reparoRowFull).join('') || '<div class="empty">Nenhum registro de manutenção.</div>'}</div>
     `;
-    return subNav + card('Relatório de Manutenções e Reparos', repFormHtml);
+    return subNav + card('Novo Chamado de Manutenção e Reparo', repFormCardHtml) + `<div class="card">${repListaHtml}</div>`;
   }
 
   if (subTabSemana === 'resumos') {
@@ -1086,21 +1166,21 @@ function viewOperacional() {
 
     let cardResumos = `
       <div class="card">
-        <h2>📊 Central de Resumos e Relatórios</h2>
+        <h2>Central de Resumos e Relatórios</h2>
         <div class="mu" style="margin-bottom:14px;">Gere relatórios compilados prontos para envio no WhatsApp da equipe e coordenação:</div>
         <div class="fx" style="gap:8px; margin-bottom:14px;">
-          <button class="b ${resumoTipoAtual === 'dia' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="dia" title="Carregar e copiar briefing de hoje">☀️ Resumo de Hoje</button>
+          <button class="b ${resumoTipoAtual === 'dia' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="dia" title="Carregar e copiar briefing de hoje"><span class="ui-glyph" aria-hidden="true">☀\uFE0E</span> Resumo de Hoje</button>
           <button class="b ${resumoTipoAtual === '1' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="1" title="Carregar e copiar compilado de 1 semana (7 dias)">1 Semana (7 dias)</button>
           <button class="b ${resumoTipoAtual === '2' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="2" title="Carregar e copiar compilado de 2 semanas (14 dias)">2 Semanas (14 dias)</button>
           <button class="b ${resumoTipoAtual === '3' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="3" title="Carregar e copiar compilado de 3 semanas (21 dias)">3 Semanas (21 dias)</button>
-          <button class="b ${resumoTipoAtual === '4' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="4" style="${resumoTipoAtual !== '4' ? 'border-color:var(--ac); color:var(--ac); font-weight:600;' : ''}" title="Carregar e copiar compilado do mês (28 dias)">🗓️ Mês (4 Semanas)</button>
+          <button class="b ${resumoTipoAtual === '4' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="4" style="${resumoTipoAtual !== '4' ? 'border-color:var(--ac); color:var(--ac); font-weight:600;' : ''}" title="Carregar e copiar compilado do mês (28 dias)">Mês (4 Semanas)</button>
         </div>
         <div class="mu" style="font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-          <span>✏️ <b>Área editável</b> (clique no texto abaixo para alterar livremente ou nos botões acima para alternar períodos):</span>
+          <span><span class="ui-glyph" aria-hidden="true">✎</span> <b>Área editável</b> (clique no texto abaixo para alterar livremente ou nos botões acima para alternar períodos):</span>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="b" data-act="baixar_planilha_resumo" style="font-size:11.5px; padding:3px 9px;" title="Gerar planilha Excel (.xlsx) formatada do período selecionado">📥 Exportar Planilha (.xlsx)</button>
-            <button class="b" data-act="copiar_resumo_editado" style="font-size:11.5px; padding:3px 9px;" title="Copiar exatamente o que foi editado abaixo">📋 Copiar texto editado</button>
-            <button class="b" data-act="restaurar_resumo_original" style="font-size:11.5px; padding:3px 9px;" title="Recarregar o modelo padrão">🔄 Restaurar original</button>
+            <button class="b" data-act="baixar_planilha_resumo" style="font-size:11.5px; padding:3px 9px;" title="Gerar planilha Excel (.xlsx) formatada do período selecionado"><span class="ui-glyph" aria-hidden="true">⇩</span> Exportar Planilha (.xlsx)</button>
+            <button class="b" data-act="copiar_resumo_editado" style="font-size:11.5px; padding:3px 9px;" title="Copiar exatamente o que foi editado abaixo"><span class="ui-glyph" aria-hidden="true">≡</span> Copiar texto editado</button>
+            <button class="b" data-act="restaurar_resumo_original" style="font-size:11.5px; padding:3px 9px;" title="Recarregar o modelo padrão"><span class="ui-glyph" aria-hidden="true">↻</span> Restaurar original</button>
           </div>
         </div>
         <div id="campoResumoEditavel" 
@@ -1125,8 +1205,8 @@ function viewOperacional() {
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
             <b>Ficheiros preparados para o PDF (${qtd}):</b>
             <div style="display:flex; gap:8px;">
-              <button class="b" data-act="limpar_imagens_conv" style="font-size:12px; padding:5px 12px;">🧹 Limpar lista</button>
-              <button class="b p" data-act="exec_converter_img">📥 Descarregar PDF (${qtd} pág${qtd > 1 ? 's' : ''})</button>
+              <button class="b" data-act="limpar_imagens_conv" style="font-size:12px; padding:5px 12px;"><span class="ui-glyph" aria-hidden="true">✕</span> Limpar lista</button>
+              <button class="b p" data-act="exec_converter_img"><span class="ui-glyph" aria-hidden="true">⇩</span> Descarregar PDF (${qtd} pág${qtd > 1 ? 's' : ''})</button>
             </div>
           </div>
           <div class="conversor-grid-galeria">
@@ -1147,12 +1227,12 @@ function viewOperacional() {
 
     let cardConversor = `
       <div class="card">
-        <h2>🖼️ Conversor de Imagens para PDF</h2>
+        <h2>Conversor de Imagens para PDF</h2>
         <div class="mu" style="margin-bottom:14px;">Arraste ou escolha uma ou várias imagens para compilar um único documento PDF com pré-visualização instantânea:</div>
 
         <div id="dropzoneImagens" class="dropzone-box" data-act="trigger_input_img">
           <input type="file" id="inputImagensPdf" accept="image/png, image/jpeg, image/jpg" multiple style="display:none;">
-          <div class="dropzone-icon">📁</div>
+          <div class="dropzone-icon ui-glyph" aria-hidden="true">⇧</div>
           <div style="font-size:14px; font-weight:600; color:var(--tx); margin-bottom:4px;">
             Arraste e solte as suas imagens aqui, ou <span style="color:var(--ac); text-decoration:underline;">clique para procurar</span>
           </div>
@@ -1165,7 +1245,13 @@ function viewOperacional() {
     return subNav + cardConversor;
   }
 
-  const a = mon(wk), b = addD(a, 6), G = groups(a, b); 
+  const a = mon(wk), b = addD(a, 6);
+  const termosBuscaDocs = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
+  const G = groups(a, b).filter(g => {
+    if (!termosBuscaDocs.length) return true;
+    const aulasCorpus = g.aulas.map(au => `${au.turma} ${au.hora} ${au.desc}`).join(' ');
+    return matchBusca(`${g.prof} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBuscaDocs);
+  });
   let body = '', last = '';
   G.forEach(g => { 
     if (g.dia !== last) { body += `<div class="hd">${wd(g.dia)} ${br(g.dia)}</div>`; last = g.dia; } 
