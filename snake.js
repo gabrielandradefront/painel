@@ -76,6 +76,8 @@
   let jogoLoop = null;
   let fallbackTimer = null;
   let appleFallbackTimer = null;
+  let tickerInterval = null;
+  let tickerAnimTimer = null;
   let handlerTeclasJogo = null;
   let resetarRodadaFn = null;
   let snakeChannel = null;
@@ -152,35 +154,29 @@
 
         <div id="snakeScoreboard" class="snake-scoreboard"></div>
 
-        <div class="snake-arena-layout">
-          <div class="snake-canvas-wrap">
-            <canvas id="canvasSnake" class="snake-canvas" width="800" height="800"></canvas>
+        <div class="snake-canvas-wrap">
+          <canvas id="canvasSnake" class="snake-canvas" width="800" height="800"></canvas>
 
-            <div id="snakeEliminadoBanner" class="snake-status-banner is-eliminated" style="display: none;">
-              <span class="ui-glyph" aria-hidden="true">⚠\uFE0E</span> Você foi eliminado! Aguardando os outros jogadores terminarem...
-            </div>
-
-            <div id="snakeEspectadorBanner" class="snake-status-banner is-spectator" style="display: none;">
-              Sala cheia (3/3) — Modo Espectador
-            </div>
-
-            <div id="snakeOverlayGameOver" class="snake-gameover-overlay" style="display: none;">
-              <span class="snake-gameover-title">Fim de Rodada!</span>
-              <div id="snakeNewRecordBanner" class="snake-new-record-banner" style="display: none;">
-                <span class="ui-glyph" aria-hidden="true">★</span> Novo recorde no Top 5
-              </div>
-              <div id="snakeRankingFinal" class="snake-ranking-final"></div>
-              <button id="btnTentarNovamenteSnake" class="b p snake-retry-btn">↻ Nova Rodada (Espaço)</button>
-            </div>
+          <div id="snakeEliminadoBanner" class="snake-status-banner is-eliminated" style="display: none;">
+            <span class="ui-glyph" aria-hidden="true">⚠\uFE0E</span> Você foi eliminado! Aguardando os outros jogadores terminarem...
           </div>
 
-          <aside id="snakeTop5Panel" class="snake-top5-card" aria-label="Top 5 Recordes">
-            <div class="snake-top5-header">
-              <span class="snake-top5-title"><span class="ui-glyph snake-top5-star" aria-hidden="true">★</span> Top 5 Recordes</span>
-              <span class="snake-top5-sub">Histórico</span>
+          <div id="snakeEspectadorBanner" class="snake-status-banner is-spectator" style="display: none;">
+            Sala cheia (3/3) — Modo Espectador
+          </div>
+
+          <div id="snakeOverlayGameOver" class="snake-gameover-overlay" style="display: none;">
+            <span class="snake-gameover-title">Fim de Rodada!</span>
+            <div id="snakeNewRecordBanner" class="snake-new-record-banner" style="display: none;">
+              <span class="ui-glyph" aria-hidden="true">★</span> Novo recorde no Top 5
             </div>
-            <ol id="snakeTop5List" class="snake-top5-list"></ol>
-          </aside>
+            <div id="snakeRankingFinal" class="snake-ranking-final"></div>
+            <button id="btnTentarNovamenteSnake" class="b p snake-retry-btn">↻ Nova Rodada (Espaço)</button>
+          </div>
+        </div>
+
+        <div id="snakeTop5Ticker" class="snake-top5-ticker" aria-live="polite" aria-label="Top 5 Recordes">
+          <div id="snakeTop5TickerItem" class="snake-top5-ticker-item"></div>
         </div>
 
         <div class="snake-modal-footer">
@@ -212,6 +208,14 @@
     if (appleFallbackTimer) {
       clearTimeout(appleFallbackTimer);
       appleFallbackTimer = null;
+    }
+    if (tickerInterval) {
+      clearInterval(tickerInterval);
+      tickerInterval = null;
+    }
+    if (tickerAnimTimer) {
+      clearTimeout(tickerAnimTimer);
+      tickerAnimTimer = null;
     }
     if (jogoLoop) {
       clearInterval(jogoLoop);
@@ -257,7 +261,7 @@
     const overlayGameOver = document.getElementById('snakeOverlayGameOver');
     const rankingFinalEl = document.getElementById('snakeRankingFinal');
     const newRecordBannerEl = document.getElementById('snakeNewRecordBanner');
-    const top5ListEl = document.getElementById('snakeTop5List');
+    const top5TickerItemEl = document.getElementById('snakeTop5TickerItem');
     const nickInputEl = document.getElementById('snakePlayerNameInput');
     const eliminadoBanner = document.getElementById('snakeEliminadoBanner');
     const espectadorBanner = document.getElementById('snakeEspectadorBanner');
@@ -280,6 +284,7 @@
     let rodadaRegistradaNoRanking = false;
     let novosRecordesIds = new Set();
     let teveNovoRecordeNaRodada = false;
+    let tickerIndex = 0;
 
     // Estado remoto dos outros jogadores:
     // { [id]: { id, slot, name, roundSeq, joinedAt, score, alive, snake, dx, dy, ts, lastPacketTime, timedOut } }
@@ -290,46 +295,111 @@
       return limparNomeJogador(nickInputEl ? nickInputEl.value : lerNickSalvo());
     }
 
-    function renderTop5Recordes() {
-      if (!top5ListEl) return;
+    function obterSequenciaTicker() {
       const lista = obterListaTop5();
-      if (!lista.length) {
-        top5ListEl.innerHTML = `<li class="snake-top5-empty">Sem recordes ainda. Marque pontos para entrar no Top 5.</li>`;
+      return lista.map((item, idx) => ({ rank: idx + 1, item })).reverse();
+    }
+
+    function aplicarConteudoTicker(entrada) {
+      if (!top5TickerItemEl) return;
+      if (!entrada) {
+        top5TickerItemEl.className = 'snake-top5-ticker-item is-empty';
+        top5TickerItemEl.textContent = 'Sem recordes registrados — jogue para estrear o Top 5';
         return;
       }
 
-      top5ListEl.innerHTML = lista.map((item, idx) => {
-        const isFirst = idx === 0;
-        const isNew = novosRecordesIds.has(item.id);
-        const marker = isFirst ? '★' : '▸';
-        const rowCls = [
-          'snake-top5-row',
-          isFirst ? 'is-first' : '',
-          isNew ? 'is-new-record' : ''
-        ].filter(Boolean).join(' ');
+      const { rank, item } = entrada;
+      const isFirst = rank === 1;
+      const isNew = novosRecordesIds.has(item.id);
+      top5TickerItemEl.className = [
+        'snake-top5-ticker-item',
+        isFirst ? 'is-first' : '',
+        isNew ? 'is-new-record' : ''
+      ].filter(Boolean).join(' ');
 
-        return `
-          <li class="${rowCls}">
-            <div class="snake-top5-rank" aria-label="${idx + 1}º lugar">
-              <span class="ui-glyph snake-top5-marker" aria-hidden="true">${marker}</span>
-              <span class="snake-top5-pos">${idx + 1}º</span>
-            </div>
-            <div class="snake-top5-info">
-              <span class="snake-top5-name" title="${escaparHtml(item.name)}">${escaparHtml(item.name)}</span>
-              <span class="snake-top5-date">${escaparHtml(item.date)}</span>
-            </div>
-            <span class="snake-top5-score">${item.score}</span>
-          </li>
-        `;
-      }).join('');
+      const prefixo = isFirst
+        ? `<span class="ui-glyph snake-ticker-star" aria-hidden="true">★</span> 1º`
+        : `${rank}º`;
+
+      top5TickerItemEl.innerHTML = `${prefixo} • <span class="snake-ticker-name">${escaparHtml(item.name)}</span> — <span class="snake-ticker-pts">${item.score} pts</span> <span class="snake-ticker-date">(${escaparHtml(item.date)})</span>`;
     }
 
-    renderTop5Recordes();
+    function renderTop5Recordes(comTransicao = false, preferirId = '') {
+      if (!top5TickerItemEl) return;
+      const seq = obterSequenciaTicker();
+
+      if (!seq.length) {
+        tickerIndex = 0;
+        aplicarConteudoTicker(null);
+        return;
+      }
+
+      if (preferirId) {
+        const idxPreferido = seq.findIndex(e => e.item.id === preferirId);
+        if (idxPreferido !== -1) tickerIndex = idxPreferido;
+      }
+      if (tickerIndex >= seq.length || tickerIndex < 0) tickerIndex = 0;
+
+      const atual = seq[tickerIndex];
+
+      if (!comTransicao || seq.length <= 1) {
+        aplicarConteudoTicker(atual);
+        return;
+      }
+
+      if (tickerAnimTimer) {
+        clearTimeout(tickerAnimTimer);
+        tickerAnimTimer = null;
+      }
+
+      top5TickerItemEl.classList.remove('is-entering');
+      top5TickerItemEl.classList.add('is-leaving');
+
+      tickerAnimTimer = setTimeout(() => {
+        tickerAnimTimer = null;
+        if (!document.getElementById('modalSnake') || !top5TickerItemEl) return;
+        aplicarConteudoTicker(atual);
+        top5TickerItemEl.classList.remove('is-leaving');
+        top5TickerItemEl.classList.add('is-entering');
+
+        const finalizarEntrada = () => {
+          if (top5TickerItemEl) top5TickerItemEl.classList.remove('is-entering');
+        };
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => requestAnimationFrame(finalizarEntrada));
+        } else {
+          setTimeout(finalizarEntrada, 16);
+        }
+      }, 170);
+    }
+
+    function iniciarRotacaoTicker() {
+      if (tickerInterval) {
+        clearInterval(tickerInterval);
+        tickerInterval = null;
+      }
+      if (tickerAnimTimer) {
+        clearTimeout(tickerAnimTimer);
+        tickerAnimTimer = null;
+      }
+      tickerIndex = 0;
+      renderTop5Recordes(false);
+
+      tickerInterval = setInterval(() => {
+        if (!document.getElementById('modalSnake')) return;
+        const seq = obterSequenciaTicker();
+        if (seq.length <= 1) return;
+        tickerIndex = (tickerIndex + 1) % seq.length;
+        renderTop5Recordes(true);
+      }, 3500);
+    }
+
+    iniciarRotacaoTicker();
 
     if (typeof PriusBus !== 'undefined' && typeof PriusBus.on === 'function') {
       unsubscribeSyncBus = PriusBus.on('sync:updated', () => {
         if (document.getElementById('modalSnake')) {
-          renderTop5Recordes();
+          renderTop5Recordes(false);
         }
       });
     }
@@ -581,7 +651,8 @@
       if (res && res.entrouLista) {
         teveNovoRecordeNaRodada = true;
         novosRecordesIds = new Set(res.novosIds || []);
-        renderTop5Recordes();
+        const primeiroNovoId = (res.novosIds && res.novosIds[0]) || '';
+        renderTop5Recordes(false, primeiroNovoId);
       }
     }
 
