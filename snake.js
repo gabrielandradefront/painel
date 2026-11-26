@@ -71,6 +71,7 @@
   const TICK_MS = 165;
   const DEAD_RECKONING_MS = 190;
   const INATIVIDADE_TIMEOUT_MS = 4000;
+  const NICK_STORAGE_KEY = (typeof KEY === 'string' ? KEY : 'prius-painel-v2') + '-snake-nick';
 
   let jogoLoop = null;
   let fallbackTimer = null;
@@ -78,6 +79,7 @@
   let handlerTeclasJogo = null;
   let resetarRodadaFn = null;
   let snakeChannel = null;
+  let unsubscribeSyncBus = null;
 
   function gerarIdUnicoInstancia() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -86,55 +88,102 @@
     return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
   }
 
+  function limparNomeJogador(raw) {
+    if (typeof normalizarNomeSnake === 'function') return normalizarNomeSnake(raw);
+    const limpo = String(raw ?? '').replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 24);
+    return limpo || 'Operador';
+  }
+
+  function lerNickSalvo() {
+    try {
+      return String(localStorage.getItem(NICK_STORAGE_KEY) || '').trim().slice(0, 24);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function salvarNickLocal(val) {
+    try {
+      localStorage.setItem(NICK_STORAGE_KEY, String(val || '').trim().slice(0, 24));
+    } catch (e) {}
+  }
+
+  function escaparHtml(s) {
+    if (typeof esc === 'function') return esc(s);
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function obterListaTop5() {
+    const raw = (typeof S !== 'undefined' && S && Array.isArray(S.snakeTop5)) ? S.snakeTop5 : [];
+    if (typeof normalizarSnakeTop5 === 'function') return normalizarSnakeTop5(raw);
+    return raw
+      .filter(r => r && Number(r.score) > 0)
+      .sort((a, b) => (b.score - a.score) || ((a.ts || 0) - (b.ts || 0)))
+      .slice(0, 5);
+  }
+
   function abrirSnake() {
     if (document.getElementById('modalSnake')) return;
 
     const playerId = gerarIdUnicoInstancia();
+    const nickInicial = lerNickSalvo();
 
     const modal = document.createElement('div');
     modal.id = 'modalSnake';
-    modal.style.cssText = `
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.84);
-      backdrop-filter: blur(6px); display: flex; flex-direction: column;
-      align-items: center; justify-content: center; z-index: 99999;
-      padding: 12px; box-sizing: border-box;
-    `;
+    modal.className = 'snake-modal-overlay';
 
     modal.innerHTML = `
-      <div style="background: var(--card, #1c1d22); border: 1px solid var(--bd, #2d2f36); border-radius: 14px; padding: 16px 18px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.65); width: fit-content; max-width: 96vw; max-height: 96vh; display: flex; flex-direction: column; align-items: center; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; gap: 12px; flex-wrap: wrap;">
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <b style="color: var(--ac, #f59e0b); font-size: 18px;">Snake ARGOS OPS Arena</b>
+      <div class="snake-modal-card" role="dialog" aria-modal="true" aria-label="Snake ARGOS OPS Arena">
+        <div class="snake-modal-header">
+          <div class="snake-modal-title-group">
+            <b class="snake-modal-title">Snake ARGOS OPS Arena</b>
             <span id="snakeModoBadge" class="pill" style="font-size: 11px; padding: 2px 9px;">● Conectando...</span>
-            <span id="snakeRoundStatus" style="font-size: 12px; color: var(--mu, #9ca3af); font-weight: 500;"></span>
+            <span id="snakeRoundStatus" class="snake-round-status"></span>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="snake-modal-actions">
+            <label class="snake-nick-field" for="snakePlayerNameInput" title="Nome exibido na partida e no Top 5">
+              <span class="snake-nick-label">Operador</span>
+              <input id="snakePlayerNameInput" class="snake-nick-input" type="text" maxlength="24" placeholder="Operador" value="${escaparHtml(nickInicial)}" autocomplete="off">
+            </label>
             <button id="btnReiniciarSnake" class="b p" disabled style="font-size: 12px; padding: 5px 11px; opacity: 0.42; cursor: not-allowed;">↻ Reiniciar</button>
-            <button id="btnFecharSnake" class="x" style="padding: 2px 8px; font-size: 18px; cursor: pointer;" title="Fechar (Esc)">✕</button>
+            <button id="btnFecharSnake" class="x snake-close-btn" title="Fechar (Esc)" aria-label="Fechar Snake">✕</button>
           </div>
         </div>
 
-        <div id="snakeScoreboard" style="display: flex; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: center; margin-bottom: 10px;"></div>
+        <div id="snakeScoreboard" class="snake-scoreboard"></div>
 
-        <div style="position: relative; display: inline-block; max-width: 92vw;">
-          <canvas id="canvasSnake" width="800" height="800" style="background: #111215; border: 2px solid var(--bd, #2d2f36); border-radius: 10px; display: block; width: min(74vh, 92vw, 800px); height: min(74vh, 92vw, 800px); max-width: 92vw; max-height: 74vh; aspect-ratio: 1/1;"></canvas>
+        <div class="snake-arena-layout">
+          <div class="snake-canvas-wrap">
+            <canvas id="canvasSnake" class="snake-canvas" width="800" height="800"></canvas>
 
-          <div id="snakeEliminadoBanner" style="display: none; position: absolute; top: 10px; right: 10px; background: rgba(17, 18, 21, 0.9); border: 1px solid rgba(239, 68, 68, 0.45); color: #fca5a5; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,0.45); max-width: 82%; text-align: left;">
-            ⚠\uFE0E Você foi eliminado! Aguardando os outros jogadores terminarem...
+            <div id="snakeEliminadoBanner" class="snake-status-banner is-eliminated" style="display: none;">
+              <span class="ui-glyph" aria-hidden="true">⚠\uFE0E</span> Você foi eliminado! Aguardando os outros jogadores terminarem...
+            </div>
+
+            <div id="snakeEspectadorBanner" class="snake-status-banner is-spectator" style="display: none;">
+              Sala cheia (3/3) — Modo Espectador
+            </div>
+
+            <div id="snakeOverlayGameOver" class="snake-gameover-overlay" style="display: none;">
+              <span class="snake-gameover-title">Fim de Rodada!</span>
+              <div id="snakeNewRecordBanner" class="snake-new-record-banner" style="display: none;">
+                <span class="ui-glyph" aria-hidden="true">★</span> Novo recorde no Top 5
+              </div>
+              <div id="snakeRankingFinal" class="snake-ranking-final"></div>
+              <button id="btnTentarNovamenteSnake" class="b p snake-retry-btn">↻ Nova Rodada (Espaço)</button>
+            </div>
           </div>
 
-          <div id="snakeEspectadorBanner" style="display: none; position: absolute; top: 10px; left: 10px; background: rgba(17, 18, 21, 0.9); border: 1px solid rgba(56, 189, 248, 0.45); color: #bae6fd; padding: 6px 11px; border-radius: 8px; font-size: 12px; font-weight: 600; pointer-events: none;">
-            Sala cheia (3/3) — Modo Espectador
-          </div>
-
-          <div id="snakeOverlayGameOver" style="display: none; position: absolute; inset: 0; background: rgba(10, 11, 14, 0.84); backdrop-filter: blur(3px); border-radius: 10px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; box-sizing: border-box;">
-            <span style="color: #f59e0b; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">Fim de Rodada!</span>
-            <div id="snakeRankingFinal" style="width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 6px;"></div>
-            <button id="btnTentarNovamenteSnake" class="b p" style="font-size: 14px; padding: 9px 20px; font-weight: 700; cursor: pointer; margin-top: 4px;">↻ Nova Rodada (Espaço)</button>
-          </div>
+          <aside id="snakeTop5Panel" class="snake-top5-card" aria-label="Top 5 Recordes">
+            <div class="snake-top5-header">
+              <span class="snake-top5-title"><span class="ui-glyph snake-top5-star" aria-hidden="true">★</span> Top 5 Recordes</span>
+              <span class="snake-top5-sub">Histórico</span>
+            </div>
+            <ol id="snakeTop5List" class="snake-top5-list"></ol>
+          </aside>
         </div>
 
-        <div style="margin-top: 10px; font-size: 12px; color: var(--mu, #8e929d);">
+        <div class="snake-modal-footer">
           Setas ou WASD para mover • <b>Espaço</b> nova rodada (ao fim) • <b>Esc</b> fecha
         </div>
       </div>
@@ -172,6 +221,10 @@
       window.removeEventListener('keydown', handlerTeclasJogo);
       handlerTeclasJogo = null;
     }
+    if (typeof unsubscribeSyncBus === 'function') {
+      try { unsubscribeSyncBus(); } catch (e) {}
+      unsubscribeSyncBus = null;
+    }
 
     if (snakeChannel) {
       const ch = snakeChannel;
@@ -203,6 +256,9 @@
     const btnReiniciar = document.getElementById('btnReiniciarSnake');
     const overlayGameOver = document.getElementById('snakeOverlayGameOver');
     const rankingFinalEl = document.getElementById('snakeRankingFinal');
+    const newRecordBannerEl = document.getElementById('snakeNewRecordBanner');
+    const top5ListEl = document.getElementById('snakeTop5List');
+    const nickInputEl = document.getElementById('snakePlayerNameInput');
     const eliminadoBanner = document.getElementById('snakeEliminadoBanner');
     const espectadorBanner = document.getElementById('snakeEspectadorBanner');
 
@@ -213,6 +269,7 @@
     let modoMultiplayer = false;
     let inicializado = false;
     let mySlot = 1; // 1, 2, 3 ou 0 (espectador)
+    let myRoundSeq = 1;
     let mySnake = [];
     let dx = 1, dy = 0;
     let inputQueue = [];
@@ -220,20 +277,91 @@
     let myAlive = true;
     let apples = [];
 
+    let rodadaRegistradaNoRanking = false;
+    let novosRecordesIds = new Set();
+    let teveNovoRecordeNaRodada = false;
+
     // Estado remoto dos outros jogadores:
-    // { [id]: { id, slot, joinedAt, score, alive, snake, dx, dy, ts, lastPacketTime, timedOut } }
+    // { [id]: { id, slot, name, roundSeq, joinedAt, score, alive, snake, dx, dy, ts, lastPacketTime, timedOut } }
     let remotePlayers = {};
     const leftIds = new Set();
+
+    function obterMeuNome() {
+      return limparNomeJogador(nickInputEl ? nickInputEl.value : lerNickSalvo());
+    }
+
+    function renderTop5Recordes() {
+      if (!top5ListEl) return;
+      const lista = obterListaTop5();
+      if (!lista.length) {
+        top5ListEl.innerHTML = `<li class="snake-top5-empty">Sem recordes ainda. Marque pontos para entrar no Top 5.</li>`;
+        return;
+      }
+
+      top5ListEl.innerHTML = lista.map((item, idx) => {
+        const isFirst = idx === 0;
+        const isNew = novosRecordesIds.has(item.id);
+        const marker = isFirst ? '★' : '▸';
+        const rowCls = [
+          'snake-top5-row',
+          isFirst ? 'is-first' : '',
+          isNew ? 'is-new-record' : ''
+        ].filter(Boolean).join(' ');
+
+        return `
+          <li class="${rowCls}">
+            <div class="snake-top5-rank" aria-label="${idx + 1}º lugar">
+              <span class="ui-glyph snake-top5-marker" aria-hidden="true">${marker}</span>
+              <span class="snake-top5-pos">${idx + 1}º</span>
+            </div>
+            <div class="snake-top5-info">
+              <span class="snake-top5-name" title="${escaparHtml(item.name)}">${escaparHtml(item.name)}</span>
+              <span class="snake-top5-date">${escaparHtml(item.date)}</span>
+            </div>
+            <span class="snake-top5-score">${item.score}</span>
+          </li>
+        `;
+      }).join('');
+    }
+
+    renderTop5Recordes();
+
+    if (typeof PriusBus !== 'undefined' && typeof PriusBus.on === 'function') {
+      unsubscribeSyncBus = PriusBus.on('sync:updated', () => {
+        if (document.getElementById('modalSnake')) {
+          renderTop5Recordes();
+        }
+      });
+    }
+
+    if (nickInputEl) {
+      nickInputEl.addEventListener('input', () => {
+        salvarNickLocal(nickInputEl.value);
+        transmitirPresenca();
+        enviarMovimento();
+        atualizarInterface();
+        desenharArena();
+      });
+      nickInputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          nickInputEl.blur();
+        }
+      });
+    }
 
     function temSupabaseAtivo() {
       return typeof sbClient !== 'undefined' && !!sbClient && typeof sbClient.channel === 'function';
     }
 
     function obterJogadoresAtivos() {
+      const meuNome = obterMeuNome();
       if (!modoMultiplayer) {
         return [{
           id: playerId,
           slot: 1,
+          name: meuNome,
+          roundSeq: myRoundSeq,
           joinedAt: myJoinedAt,
           score: myScore,
           alive: myAlive,
@@ -249,6 +377,8 @@
         lista.push({
           id: playerId,
           slot: mySlot,
+          name: meuNome,
+          roundSeq: myRoundSeq,
           joinedAt: myJoinedAt,
           score: myScore,
           alive: myAlive,
@@ -261,7 +391,12 @@
 
       Object.values(remotePlayers).forEach(rp => {
         if (rp.id !== playerId && rp.slot >= 1 && rp.slot <= 3 && !rp.timedOut) {
-          lista.push({ ...rp, isLocal: false });
+          lista.push({
+            ...rp,
+            name: limparNomeJogador(rp.name),
+            roundSeq: rp.roundSeq || 1,
+            isLocal: false
+          });
         }
       });
 
@@ -379,6 +514,8 @@
           id: playerId,
           joinedAt: myJoinedAt,
           slot: mySlot,
+          name: obterMeuNome(),
+          roundSeq: myRoundSeq,
           alive: myAlive
         });
       } catch (e) {}
@@ -394,6 +531,8 @@
           payload: {
             id: playerId,
             slot: mySlot,
+            name: obterMeuNome(),
+            roundSeq: myRoundSeq,
             snake: mySnake,
             dx: dirEnvio.dx,
             dy: dirEnvio.dy,
@@ -420,10 +559,40 @@
       } catch (e) {}
     }
 
+    function registrarFimDeRodadaNoTop5(ativos) {
+      if (rodadaRegistradaNoRanking) return;
+      rodadaRegistradaNoRanking = true;
+      novosRecordesIds = new Set();
+      teveNovoRecordeNaRodada = false;
+
+      if (typeof registrarScoresSnakeTop5 !== 'function') return;
+      const entradas = ativos
+        .filter(p => p && Math.floor(Number(p.score)) > 0)
+        .map(p => ({
+          name: limparNomeJogador(p.name),
+          score: Math.floor(Number(p.score)),
+          dedupKey: `${p.id}:${p.roundSeq || 1}:${Math.floor(Number(p.score))}`
+        }));
+
+      if (!entradas.length) return;
+
+      const souCoordenador = !modoMultiplayer || (ativos[0] && ativos[0].isLocal);
+      const res = registrarScoresSnakeTop5(entradas, { skipImmediateSync: !souCoordenador });
+      if (res && res.entrouLista) {
+        teveNovoRecordeNaRodada = true;
+        novosRecordesIds = new Set(res.novosIds || []);
+        renderTop5Recordes();
+      }
+    }
+
     function atualizarInterface() {
       const ativos = obterJogadoresAtivos();
       const vivos = ativos.filter(p => p.alive).length;
       const todosEliminados = ativos.length > 0 && vivos === 0;
+
+      if (todosEliminados && !rodadaRegistradaNoRanking) {
+        registrarFimDeRodadaNoTop5(ativos);
+      }
 
       if (modoBadgeEl) {
         if (!modoMultiplayer) {
@@ -468,14 +637,15 @@
         scoreboardEl.innerHTML = ativos.map(p => {
           const cor = SLOT_CORES[p.slot] || SLOT_CORES[1];
           const statusTxt = p.alive ? '● Jogando' : '✕ Eliminado';
-          const rotulo = p.isLocal ? `${cor.nome} (Você)` : cor.nome;
+          const nomeLimpo = escaparHtml(limparNomeJogador(p.name));
+          const rotulo = p.isLocal ? `${cor.tag} • ${nomeLimpo} (Você)` : `${cor.tag} • ${nomeLimpo}`;
           const borda = p.isLocal ? `border-color: ${cor.head}; box-shadow: 0 0 0 1px ${cor.head}44;` : '';
           return `
-            <div style="display: inline-flex; align-items: center; gap: 8px; padding: 5px 11px; border-radius: 9px; background: var(--card-sub, #23252c); border: 1px solid var(--bd, #2d2f36); font-size: 12.5px; ${borda}">
+            <div class="snake-score-chip" style="${borda}">
               <span style="width: 10px; height: 10px; border-radius: 999px; background: ${cor.head}; display: inline-block; flex-shrink: 0;"></span>
-              <b style="color: var(--tx, #fff);">${rotulo}</b>
-              <span style="color: var(--ac, #f59e0b); font-weight: 700; font-variant-numeric: tabular-nums;">${p.score} pts</span>
-              <span style="font-size: 11.5px; color: ${p.alive ? '#34d399' : '#f87171'}; font-weight: 600;">${statusTxt}</span>
+              <b class="snake-score-chip-name">${rotulo}</b>
+              <span class="snake-score-chip-pts">${p.score} pts</span>
+              <span style="font-size: 11.5px; color: ${p.alive ? 'var(--ok, #34d399)' : 'var(--er, #f87171)'}; font-weight: 600;">${statusTxt}</span>
             </div>
           `;
         }).join('') || '<span class="mu" style="font-size:12px;">Nenhum jogador ativo na arena</span>';
@@ -485,9 +655,13 @@
         if (todosEliminados) {
           const ranking = [...ativos].sort((a, b) => b.score - a.score || a.slot - b.slot);
           const medalhas = ['1º', '2º', '3º'];
+          if (newRecordBannerEl) {
+            newRecordBannerEl.style.display = teveNovoRecordeNaRodada ? 'inline-flex' : 'none';
+          }
           rankingFinalEl.innerHTML = ranking.map((p, idx) => {
             const cor = SLOT_CORES[p.slot] || SLOT_CORES[1];
-            const rotulo = p.isLocal ? `${cor.nome} (Você)` : cor.nome;
+            const nomeLimpo = escaparHtml(limparNomeJogador(p.name));
+            const rotulo = p.isLocal ? `${nomeLimpo} (Você)` : nomeLimpo;
             return `
               <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 9px; background: rgba(255,255,255,0.06); border: 1px solid ${p.isLocal ? cor.head : 'rgba(255,255,255,0.1)'}; font-size: 13.5px;">
                 <span style="display: inline-flex; align-items: center; gap: 8px; color: #fff;">
@@ -501,12 +675,21 @@
           }).join('');
           overlayGameOver.style.display = 'flex';
         } else {
+          if (newRecordBannerEl) newRecordBannerEl.style.display = 'none';
           overlayGameOver.style.display = 'none';
         }
       }
     }
 
     function reiniciarMinhaCobrinha(ehNovaRodada = true, forcarNovasMacas = false) {
+      if (ehNovaRodada) {
+        if (inicializado) myRoundSeq += 1;
+        rodadaRegistradaNoRanking = false;
+        novosRecordesIds = new Set();
+        teveNovoRecordeNaRodada = false;
+        renderTop5Recordes();
+      }
+
       if (mySlot < 1 || mySlot > 3) {
         atualizarInterface();
         return;
@@ -593,6 +776,8 @@
         if (!remotePlayers[p.id]) entrouNovoJogador = true;
         const prev = remotePlayers[p.id] || {
           id: p.id,
+          name: 'Operador',
+          roundSeq: 1,
           snake: [],
           dx: 1,
           dy: 0,
@@ -608,6 +793,8 @@
           id: p.id,
           joinedAt: p.joinedAt,
           slot: typeof p.slot === 'number' ? p.slot : prev.slot,
+          name: typeof p.name === 'string' ? limparNomeJogador(p.name) : limparNomeJogador(prev.name),
+          roundSeq: typeof p.roundSeq === 'number' ? p.roundSeq : (prev.roundSeq || 1),
           score: typeof prev.score === 'number' ? prev.score : 0,
           alive: novoAlive,
           lastPacketTime: prev.lastPacketTime || agora
@@ -736,7 +923,8 @@
         ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.fillText(p.isLocal ? `${cor.tag}•Você` : cor.tag, cabeca.x * gridSize + gridSize / 2, Math.max(11, cabeca.y * gridSize - 3));
+        const nomeTag = limparNomeJogador(p.name).slice(0, 12);
+        ctx.fillText(p.isLocal ? `${nomeTag} (Você)` : nomeTag, cabeca.x * gridSize + gridSize / 2, Math.max(11, cabeca.y * gridSize - 3));
       });
     }
 
@@ -945,6 +1133,8 @@
             ...prev,
             id: p.id,
             slot: p.slot,
+            name: typeof p.name === 'string' ? limparNomeJogador(p.name) : limparNomeJogador(prev.name),
+            roundSeq: typeof p.roundSeq === 'number' ? p.roundSeq : (prev.roundSeq || 1),
             joinedAt: prev.joinedAt || Date.now(),
             score: p.score || 0,
             alive: !!p.alive,
@@ -971,6 +1161,10 @@
         .on('broadcast', { event: 'reset_all' }, () => {
           const agora = Date.now();
           apples = [];
+          rodadaRegistradaNoRanking = false;
+          novosRecordesIds = new Set();
+          teveNovoRecordeNaRodada = false;
+          renderTop5Recordes();
           Object.values(remotePlayers).forEach(rp => {
             rp.timedOut = false;
             rp.lastPacketTime = agora;
@@ -1000,6 +1194,8 @@
               id: playerId,
               joinedAt: myJoinedAt,
               slot: mySlot,
+              name: obterMeuNome(),
+              roundSeq: myRoundSeq,
               alive: mySlot >= 1
             });
             sincronizarPresenca();

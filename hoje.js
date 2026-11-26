@@ -85,7 +85,7 @@ function viewHoje() {
         </select>
         ${btnAddEnvio}
       </div>
-      <button class="b" data-act="ir_fila_material" data-turma="${esc(a.turma)}" style="font-size: 11.5px; padding: 3px 8px;" title="Adicionar à fila de envio"><span class="ui-glyph" aria-hidden="true">▸</span> Fila</button>
+      <button class="b hoje-fila-btn" data-act="ir_fila_material" data-turma="${esc(a.turma)}" title="Adicionar à fila de envio"><span class="ui-glyph" aria-hidden="true">▸</span> Fila</button>
     </div>
   `;
 

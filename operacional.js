@@ -27,26 +27,30 @@ const docPend = G => G.reduce((n, g) => { const d = S.docs[g.k] || {}; return n 
 
 const docRow = g => {
   const d = S.docs[g.k] || {};
-  const profAlert = g.prof === '(sem professor)' ? '<span class="pill w">Defina o professor</span>' : '';
+  const profAlert = g.prof === '(sem professor)' ? '<span class="pill w" style="font-size:10.5px; padding:2px 8px;">Defina o professor</span>' : '';
   const aulasStr = g.aulas.map(a => esc(a.turma) + (a.hora ? ' ' + esc(a.hora) : '')).join(' + ');
   
   return `
     <div class="row ${docDone(g) ? 'done' : ''}">
       <div class="t">
-        <b>${esc(g.prof)} — ${wd(g.dia)} ${br(g.dia)}</b>
-        ${profAlert}
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <b>${esc(g.prof)} — ${wd(g.dia)} ${br(g.dia)}</b>
+          ${profAlert}
+        </div>
         <span class="mu">${aulasStr}</span>
       </div>
-      <label class="pill ${d.recibo ? 'o' : 'w'}">
-        <input type="checkbox" data-act="doc" data-k="${esc(g.k)}" data-f="recibo" ${d.recibo ? 'checked' : ''}> Recibo
-      </label>
-      <label class="pill ${d.aprovado ? 'o' : 'w'}">
-        <input type="checkbox" data-act="doc" data-k="${esc(g.k)}" data-f="aprovado" ${d.aprovado ? 'checked' : ''}> Aprovado
-      </label>
-      <label class="pill ${d.enviado ? 'o' : 'w'}">
-        <input type="checkbox" data-act="doc" data-k="${esc(g.k)}" data-f="enviado" ${d.enviado ? 'checked' : ''}> Enviado
-      </label>
-      <button class="b" data-act="cpdoc" data-k="${esc(g.k)}">Copiar</button>
+      <div class="doc-actions">
+        <label class="pill ${d.recibo ? 'o' : 'w'}">
+          <input type="checkbox" data-act="doc" data-k="${esc(g.k)}" data-f="recibo" ${d.recibo ? 'checked' : ''}> Recibo
+        </label>
+        <label class="pill ${d.aprovado ? 'o' : 'w'}">
+          <input type="checkbox" data-act="doc" data-k="${esc(g.k)}" data-f="aprovado" ${d.aprovado ? 'checked' : ''}> Aprovado
+        </label>
+        <label class="pill ${d.enviado ? 'o' : 'w'}">
+          <input type="checkbox" data-act="doc" data-k="${esc(g.k)}" data-f="enviado" ${d.enviado ? 'checked' : ''}> Enviado
+        </label>
+        <button class="b" data-act="cpdoc" data-k="${esc(g.k)}">Copiar</button>
+      </div>
     </div>
   `;
 };

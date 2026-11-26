@@ -365,6 +365,8 @@ function normalizarEstado(raw) {
       })
       .filter(Boolean);
   }
+
+  obj.snakeTop5 = normalizarSnakeTop5(obj.snakeTop5);
   
   const defaultPresets = {
     reparos: {
@@ -640,11 +642,13 @@ async function iniciarSupabase() {
        (data.dados.reparos && data.dados.reparos.length > 0) ||
        (data.dados.orc && data.dados.orc.itens && data.dados.orc.itens.length > 0) ||
        (data.dados.lembretes && data.dados.lembretes.length > 0) ||
+       (Array.isArray(data.dados.snakeTop5) && data.dados.snakeTop5.length > 0) ||
        Array.isArray(data.dados.supportSheets));
 
     const localTemDados = (S.aulas && S.aulas.length > 0) ||
       (S.reparos && S.reparos.length > 0) ||
-      (S.orc && S.orc.itens && S.orc.itens.length > 0);
+      (S.orc && S.orc.itens && S.orc.itens.length > 0) ||
+      (Array.isArray(S.snakeTop5) && S.snakeTop5.length > 0);
 
     if (nuvemTemDados) {
       // A nuvem já possui dados: aplica no painel e atualiza o cache local
@@ -720,12 +724,98 @@ const save = () => {
 const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const br = d => (typeof d === 'string' && d.includes('-')) ? esc(d.split('-').reverse().slice(0, 2).join('/')) : esc(d || '');
+const formatarDataBR = ts => {
+  const dt = ts == null || ts === '' ? new Date() : new Date(ts);
+  if (isNaN(dt.getTime())) return `${pad(new Date().getDate())}/${pad(new Date().getMonth() + 1)}/${new Date().getFullYear()}`;
+  return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+};
 const formatarDataHoraBR = ts => {
   if (ts == null || ts === '') return '';
   const dt = new Date(ts);
   if (isNaN(dt.getTime())) return '';
   return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} às ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 };
+function normalizarNomeSnake(raw) {
+  const limpo = String(raw ?? '').replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 24);
+  return limpo || 'Operador';
+}
+function normalizarSnakeTop5(rawList) {
+  if (!Array.isArray(rawList)) return [];
+  const vistosDedup = new Set();
+  const limpos = [];
+  rawList.forEach((item, idx) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    const clean = safePlainObj(item);
+    const score = Math.floor(Number(clean.score));
+    if (!Number.isFinite(score) || score <= 0) return;
+    const name = normalizarNomeSnake(clean.name);
+    const rawTs = Number(clean.ts);
+    const ts = Number.isFinite(rawTs) && rawTs > 0 ? rawTs : (Date.now() + idx);
+    const rawDate = typeof clean.date === 'string' ? clean.date.trim() : '';
+    const date = /^\d{2}\/\d{2}\/\d{4}$/.test(rawDate) ? rawDate : formatarDataBR(ts);
+    const dedupKey = (typeof clean.dedupKey === 'string' && clean.dedupKey.trim()) ? clean.dedupKey.trim().slice(0, 80) : '';
+    if (dedupKey) {
+      if (vistosDedup.has(dedupKey)) return;
+      vistosDedup.add(dedupKey);
+    }
+    const id = (typeof clean.id === 'string' && clean.id.trim())
+      ? clean.id.trim().slice(0, 64)
+      : (dedupKey || `rec_${ts}_${idx}`);
+    const entry = { id, name, score, date, ts };
+    if (dedupKey) entry.dedupKey = dedupKey;
+    limpos.push(entry);
+  });
+  return limpos
+    .sort((a, b) => (b.score - a.score) || (a.ts - b.ts) || String(a.id).localeCompare(String(b.id)))
+    .slice(0, 5);
+}
+function registrarScoresSnakeTop5(entradas, opts = {}) {
+  const atuais = normalizarSnakeTop5(S && S.snakeTop5);
+  const agora = Date.now();
+  const dataHojeBR = formatarDataBR(agora);
+  const candidatos = [];
+  const novosDedup = new Set();
+  const novosIds = new Set();
+
+  (Array.isArray(entradas) ? entradas : []).forEach((item, idx) => {
+    if (!item || typeof item !== 'object') return;
+    const score = Math.floor(Number(item.score));
+    if (!Number.isFinite(score) || score <= 0) return;
+    const name = normalizarNomeSnake(item.name);
+    const dedupKey = (typeof item.dedupKey === 'string' && item.dedupKey.trim()) ? item.dedupKey.trim().slice(0, 80) : '';
+    if (dedupKey && atuais.some(r => r.dedupKey === dedupKey)) return;
+    const ts = agora + idx;
+    const id = dedupKey || `rec_${ts.toString(36)}_${uid()}`;
+    const reg = { id, name, score, date: dataHojeBR, ts };
+    if (dedupKey) {
+      reg.dedupKey = dedupKey;
+      novosDedup.add(dedupKey);
+    }
+    novosIds.add(id);
+    candidatos.push(reg);
+  });
+
+  if (!candidatos.length) {
+    return { entrouLista: false, novosIds: [], top5: atuais };
+  }
+
+  const combinado = normalizarSnakeTop5([...atuais, ...candidatos]);
+  const idsFinaisNovos = combinado
+    .filter(r => novosIds.has(r.id) || (r.dedupKey && novosDedup.has(r.dedupKey)))
+    .map(r => r.id);
+
+  if (!idsFinaisNovos.length) {
+    return { entrouLista: false, novosIds: [], top5: atuais };
+  }
+
+  S.snakeTop5 = combinado;
+  save();
+  if (!opts.skipImmediateSync && supabaseConfigurado() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+    clearTimeout(sbSyncTimer);
+    enviarEstadoParaNuvem();
+  }
+  return { entrouLista: true, novosIds: idsFinaisNovos, top5: combinado };
+}
 function touchCronograma(turma, isNew = false, ts = new Date().toISOString()) {
   const nome = String(turma || '').trim();
   const k = norm(nome);
@@ -864,8 +954,8 @@ const card = (t, body, n) => {
     let badge = '';
     if (n != null) {
       badge = n > 0 
-        ? ` <span class="pill w" style="min-width:20px; justify-content:center; font-weight:700;" title="${n} item(ns)">${n}</span>` 
-        : ` <span class="pill o" style="width:8px; height:8px; min-width:8px; padding:0; border-radius:999px; display:inline-block; vertical-align:middle;"></span>`;
+        ? `<span class="pill w card-count-badge" title="${n} item(ns)">${n}</span>` 
+        : `<span class="pill o card-dot-badge" aria-hidden="true"></span>`;
     }
     header = `<h2>${t}${badge}</h2>`;
   }

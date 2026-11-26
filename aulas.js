@@ -376,7 +376,7 @@ function uploadCard() {
     <div class="fx" style="gap:6px; margin-bottom:12px;">
       <button class="b ${modoEntradaCronograma === 'pdf' ? 'p' : ''}" data-act="set_modo_crono" data-m="pdf"><span class="ui-glyph" aria-hidden="true">⇧</span> Arquivo PDF</button>
       <button class="b ${modoEntradaCronograma === 'texto' ? 'p' : ''}" data-act="set_modo_crono" data-m="texto"><span class="ui-glyph" aria-hidden="true">≡</span> Colar Texto</button>
-      <button class="b ${modoEntradaCronograma === 'novo' ? 'p' : ''}" data-act="set_modo_crono" data-m="novo">+ Novo Cronograma</button>
+      <button class="b ${modoEntradaCronograma === 'novo' ? 'p' : ''}" data-act="set_modo_crono" data-m="novo"><span class="ui-glyph" aria-hidden="true">+</span> Novo Cronograma</button>
     </div>
   `;
 
@@ -708,14 +708,16 @@ function viewAulas() {
   const aulaEdit = a => {
     const semProf = !a.prof || a.prof.trim() === '' || norm(a.prof) === norm('(sem professor)');
     const f = (k, ph, listId = '') => `<input class="obs ${a[k] ? '' : 'miss'}" style="margin:0; width:100%;" data-act="ae" data-id="${esc(a.id)}" data-f="${k}" ${listId ? `list="${listId}"` : ''} placeholder="${ph}" value="${esc(a[k])}" title="${ph}">`;
-    const bdg = (!a.confirmada && a.destaque) ? `<span class="pill ${a.destaque === 'nova' ? 'o' : 'w'}" style="margin-left:6px">${esc(String(a.destaque).toUpperCase())}</span>` : '';
-    const alertSemProf = semProf ? `<span class="pill w" style="margin-left:6px; font-size:11px;">⚠\uFE0E Definir Professor</span>` : '';
+    const bdg = (!a.confirmada && a.destaque) ? `<span class="pill ${a.destaque === 'nova' ? 'o' : 'w'}">${esc(String(a.destaque).toUpperCase())}</span>` : '';
+    const alertSemProf = semProf ? `<span class="pill w" style="font-size:11px;">⚠\uFE0E Definir Professor</span>` : '';
 
     return `
-      <div class="row ${a.confirmada ? 'done' : ''} ${semProf ? 'sem-docente' : ''}" style="align-items:flex-start;">
-        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} style="margin-top:4px" title="Confirmar aula">
-        <div class="t" style="flex:1 1 260px">
-          <b>${wd(a.dia)} ${br(a.dia)} ${bdg} ${alertSemProf}</b>
+      <div class="row aula-row ${a.confirmada ? 'done' : ''} ${semProf ? 'sem-docente' : ''}">
+        <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="confirmada" ${a.confirmada ? 'checked' : ''} title="Confirmar aula">
+        <div class="t" style="flex:1 1 320px">
+          <div class="aula-row-head">
+            <b>${wd(a.dia)} ${br(a.dia)}</b>${bdg}${alertSemProf}
+          </div>
           <div class="aula-grid-inputs">
             ${f('prof', 'Docente / Professor', 'listaProfsQuadro')}
             ${f('turma', 'Turma / Sala', 'listaSalasTurmasQuadro')}
@@ -726,10 +728,12 @@ function viewAulas() {
             ${f('desc', 'Disciplina / Conteúdo', 'listaDisciplinasQuadro')}
           </div>
         </div>
-        <label class="pill ${a.materialPronto ? 'o' : 'w'}" title="Marcar material (slide) como enviado">
-          <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''}> Slide
-        </label>
-        <button class="b" data-act="del_aula" data-id="${esc(a.id)}">Excluir</button>
+        <div class="aula-row-actions">
+          <label class="pill ${a.materialPronto ? 'o' : 'w'}" title="Marcar material (slide) como enviado">
+            <input type="checkbox" data-act="tog" data-l="aulas" data-id="${esc(a.id)}" data-f="materialPronto" ${a.materialPronto ? 'checked' : ''}> Slide
+          </label>
+          <button class="b" data-act="del_aula" data-id="${esc(a.id)}">Excluir</button>
+        </div>
       </div>
     `;
   };

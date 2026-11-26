@@ -1365,7 +1365,7 @@ function viewOrc() {
                 <tr style="border-bottom:2px solid var(--bd); color:var(--mu);">
                   <th style="padding:8px;">Nome do Item</th>
                   <th style="padding:8px; text-align:right;">Qtd.</th>
-                  <th style="padding:8px;">Unid. ${orcGear('unidades', 'Gerenciar Unidades de Medida')}</th>
+                  <th style="padding:8px;"><span style="display:inline-flex; align-items:center; gap:6px;">Unid. ${orcGear('unidades', 'Gerenciar Unidades de Medida')}</span></th>
                   <th style="padding:8px; text-align:right;">Valor Unitário</th>
                   <th style="padding:8px; text-align:right;">Subtotal</th>
                   <th style="padding:8px; text-align:right;">Ações</th>
