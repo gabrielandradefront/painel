@@ -508,7 +508,8 @@ function coletarResultadosBuscaGlobal(termos) {
     const diaBr = typeof br === 'function' ? br(a.dia) : a.dia;
     const diaBrAno = a.dia ? a.dia.split('-').reverse().join('/') : '';
     const diaSem = typeof wd === 'function' ? wd(a.dia) : '';
-    const corpus = `${a.prof || ''} ${a.turma || ''} ${a.desc || ''} ${a.turno || ''} ${a.formaEnvio || ''} ${a.dia || ''} ${diaBr} ${diaBrAno} ${diaSem} ${a.hora || ''}`;
+    const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(a.prof) : (a.prof || '');
+    const corpus = `${profCorpus} ${a.turma || ''} ${a.desc || ''} ${a.turno || ''} ${a.formaEnvio || ''} ${a.dia || ''} ${diaBr} ${diaBrAno} ${diaSem} ${a.hora || ''}`;
     return matchBusca(corpus, termos);
   });
 
@@ -520,7 +521,8 @@ function coletarResultadosBuscaGlobal(termos) {
 
   const resDocs = (typeof groups === 'function' ? groups('0000-00-00', '9999-99-99') : []).filter(g => {
     const aulasStr = (g.aulas || []).map(a => `${a.turma || ''} ${a.desc || ''} ${a.hora || ''}`).join(' ');
-    return matchBusca(`${g.prof || ''} ${br(g.dia)} ${wd(g.dia)} ${aulasStr}`, termos);
+    const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(g.prof) : (g.prof || '');
+    return matchBusca(`${profCorpus} ${br(g.dia)} ${wd(g.dia)} ${aulasStr}`, termos);
   });
 
   const resOrc = (S.orc.itens || []).filter(i => {
@@ -533,14 +535,19 @@ function coletarResultadosBuscaGlobal(termos) {
     return matchBusca(`${h.titulo || ''} ${h.fornecedor || ''} ${h.categoria || ''} ${h.obs || ''} ${h.data || ''} ${itensStr}`, termos);
   });
 
-  return { resAulas, resReparos, resDocs, resOrc, resOrcHist };
+  const resProfessores = (Array.isArray(S.professores) ? S.professores : []).filter(p => {
+    const corpus = `${p.name || ''} ${(p.aliases || []).join(' ')} ${(p.subjects || []).join(' ')} ${p.turno || ''} ${p.sala || ''}`;
+    return matchBusca(corpus, termos);
+  });
+
+  return { resAulas, resReparos, resDocs, resOrc, resOrcHist, resProfessores };
 }
 
 function renderResultadosBuscaGeral(termos, dados) {
-  const { resAulas, resReparos, resDocs, resOrc, resOrcHist } = dados || coletarResultadosBuscaGlobal(termos);
+  const { resAulas, resReparos, resDocs, resOrc, resOrcHist, resProfessores = [] } = dados || coletarResultadosBuscaGlobal(termos);
   const totalOp = resReparos.length + resDocs.length;
   const totalOrc = resOrc.length + resOrcHist.length;
-  const totalResultados = resAulas.length + totalOp + totalOrc;
+  const totalResultados = resAulas.length + resProfessores.length + totalOp + totalOrc;
 
   let filtroCategoriasHtml = `
     <div class="search-category-filter-bar">
@@ -564,11 +571,28 @@ function renderResultadosBuscaGeral(termos, dados) {
 
   let html = filtroCategoriasHtml;
 
+  if ((buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'aulas') && resProfessores.length) {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+      <h3 style="margin:0;">Professores cadastrados (${resProfessores.length})</h3>
+    </div>${resProfessores.map(p => {
+      const aliasesTxt = (p.aliases || []).length ? `Apelidos: ${(p.aliases || []).join(', ')}` : '';
+      const subjectsTxt = (p.subjects || []).length ? `Disciplinas: ${(p.subjects || []).join(', ')}` : '';
+      const detalhes = [aliasesTxt, subjectsTxt].filter(Boolean).join(' • ') || 'Cadastro principal';
+      return `<div class="row">
+        <div class="t">
+          <b>${esc(p.name)}</b>
+          <span class="mu">${esc(detalhes)}</span>
+        </div>
+        <button type="button" class="b" data-act="abrir_prof_cadastro" data-id="${esc(p.id)}" style="font-size:11.5px; padding:3px 9px;">Abrir cadastro &rarr;</button>
+      </div>`;
+    }).join('')}`;
+  }
+
   if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'aulas') {
     html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
       <h3 style="margin:0;">Aulas encontradas (${resAulas.length})</h3>
       <button class="b" data-act="ir_aba_busca" data-tab="aulas" data-sub="quadro" style="font-size:11.5px; padding:3px 9px;">Abrir em Aulas &rarr;</button>
-    </div>${resAulas.map(typeof aulaRow === 'function' ? aulaRow : (a => `<div class="row"><div class="t"><b>${esc(a.prof)} — ${esc(a.turma)}</b><span class="mu">${wd(a.dia)} ${br(a.dia)}${a.hora ? ' • ' + esc(a.hora) : ''}${a.desc ? ' — ' + esc(a.desc) : ''}</span></div></div>`)).join('') || '<div class="empty">Nenhuma aula encontrada para este filtro.</div>'}`;
+    </div>${resAulas.map(typeof aulaRow === 'function' ? aulaRow : (a => `<div class="row"><div class="t"><b>${esc(typeof profCanon === 'function' ? profCanon(a.prof) : a.prof)} — ${esc(a.turma)}</b><span class="mu">${wd(a.dia)} ${br(a.dia)}${a.hora ? ' • ' + esc(a.hora) : ''}${a.desc ? ' — ' + esc(a.desc) : ''}</span></div></div>`)).join('') || '<div class="empty">Nenhuma aula encontrada para este filtro.</div>'}`;
   }
 
   if (buscaGlobalTipo === 'todos' || buscaGlobalTipo === 'operacional') {
@@ -618,7 +642,8 @@ function renderTabAtiva() {
       const cDia = dataConfirmacaoAula(a.dia);
       if (!(cDia === hoje || (cDia < hoje && !a.confirmada))) return false;
       if (!termosBusca.length) return true;
-      return matchBusca(`${a.prof} ${a.turma} ${a.desc} ${a.turno} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca);
+      const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(a.prof) : (a.prof || '');
+      return matchBusca(`${profCorpus} ${a.turma} ${a.desc} ${a.turno} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca);
     });
     aulasConf.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
     const confPendentes = aulasConf.filter(a => !a.confirmada);
@@ -626,7 +651,8 @@ function renderTabAtiva() {
     const pendDocs = (typeof docDone === 'function' ? G.filter(g => !docDone(g)) : []).filter(g => {
       if (!termosBusca.length) return true;
       const aulasCorpus = g.aulas.map(a => `${a.turma} ${a.hora} ${a.desc}`).join(' ');
-      return matchBusca(`${g.prof} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBusca);
+      const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(g.prof) : (g.prof || '');
+      return matchBusca(`${profCorpus} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBusca);
     });
     const repPend = S.reparos.filter(r => {
       if (r.status === 'Concluído') return false;
@@ -660,7 +686,10 @@ function renderTabAtiva() {
     }
 
     if (termosBusca.length) {
-      matsEnvio = matsEnvio.filter(a => matchBusca(`${a.turma} ${a.desc} ${a.prof} ${a.formaEnvio} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca));
+      matsEnvio = matsEnvio.filter(a => {
+        const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(a.prof) : (a.prof || '');
+        return matchBusca(`${a.turma} ${a.desc} ${profCorpus} ${a.formaEnvio} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca);
+      });
     }
 
     matsEnvio.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
@@ -852,7 +881,8 @@ function views() {
   const dadosBusca = coletarResultadosBuscaGlobal(termosBusca);
   const totalOp = dadosBusca.resReparos.length + dadosBusca.resDocs.length;
   const totalOrc = dadosBusca.resOrc.length + dadosBusca.resOrcHist.length;
-  const totalGeral = dadosBusca.resAulas.length + totalOp + totalOrc;
+  const totalProfs = Array.isArray(dadosBusca.resProfessores) ? dadosBusca.resProfessores.length : 0;
+  const totalGeral = dadosBusca.resAulas.length + totalProfs + totalOp + totalOrc;
   const expandida = typeof buscaGlobalExpandida !== 'undefined' && buscaGlobalExpandida;
 
   const barraBuscaHtml = `
@@ -978,6 +1008,23 @@ document.addEventListener('input', e => {
   }
   if (e.target.id === 'inpApNome' || e.target.id === 'inpApAlts') {
     atualizarAvisoApelidoForm();
+  }
+  if (e.target.id === 'filtroGestaoProfs') {
+    filtroGestaoProfs = e.target.value;
+    let selStart = null, selEnd = null;
+    try { selStart = e.target.selectionStart; selEnd = e.target.selectionEnd; } catch (err) {}
+    const panelProf = document.getElementById('settingsTabPanelProfessores');
+    if (panelProf && typeof cardApelidos === 'function') {
+      panelProf.innerHTML = cardApelidos();
+      const inp = document.getElementById('filtroGestaoProfs');
+      if (inp) {
+        inp.focus();
+        if (selStart !== null && selEnd !== null) {
+          try { inp.setSelectionRange(selStart, selEnd); } catch (err) {}
+        }
+      }
+    }
+    return;
   }
 });
 
@@ -1412,12 +1459,17 @@ document.addEventListener('click', async e => {
   }
 
   if (a === 'copiar_resumo') {
-    const tipo = t.dataset.tipo;
+    const tipo = t.dataset.tipo || 'dia';
     resumoTipoAtual = tipo;
+    if (typeof resolverIntervaloResumo === 'function') {
+      const iv = resolverIntervaloResumo(tipo);
+      resumoDataIni = iv.dataIni;
+      resumoDataFim = iv.dataFim;
+    }
+    resumoTextoCustomizado = null;
 
     if (typeof gerarResumoOperacional === 'function') {
-      const txt = gerarResumoOperacional(tipo);
-      resumoTextoCustomizado = txt;
+      const txt = gerarResumoOperacional(tipo, resumoDataIni, resumoDataFim);
       const elResumo = document.getElementById('campoResumoEditavel');
       if (elResumo) elResumo.innerText = txt;
       copy(txt);
@@ -1430,23 +1482,26 @@ document.addEventListener('click', async e => {
 
   if (a === 'baixar_planilha_resumo') {
     if (typeof baixarPlanilhaResumo === 'function') {
-      await baixarPlanilhaResumo(resumoTipoAtual || 'dia');
+      await baixarPlanilhaResumo(resumoTipoAtual || 'dia', resumoDataIni, resumoDataFim);
     }
     return;
   }
 
   if (a === 'copiar_resumo_editado') {
     const elResumo = document.getElementById('campoResumoEditavel');
-    const txt = elResumo ? elResumo.innerText : (resumoTextoCustomizado || '');
+    const txtPadrao = typeof gerarResumoOperacional === 'function'
+      ? gerarResumoOperacional(resumoTipoAtual || 'dia', resumoDataIni, resumoDataFim)
+      : '';
+    const txt = elResumo ? elResumo.innerText : (typeof resumoTextoCustomizado === 'string' ? resumoTextoCustomizado : txtPadrao);
     copy(txt);
-    toast('Texto editado copiado para a área de transferência!');
+    toast('Resumo copiado para envio no WhatsApp!');
     return;
   }
 
   if (a === 'restaurar_resumo_original') {
+    resumoTextoCustomizado = null;
     if (typeof gerarResumoOperacional === 'function') {
-      const txt = gerarResumoOperacional(resumoTipoAtual || 'dia');
-      resumoTextoCustomizado = txt;
+      const txt = gerarResumoOperacional(resumoTipoAtual || 'dia', resumoDataIni, resumoDataFim);
       const elResumo = document.getElementById('campoResumoEditavel');
       if (elResumo) elResumo.innerText = txt;
       toast('Modelo original restaurado!');
@@ -1895,11 +1950,83 @@ document.addEventListener('click', async e => {
     render();
     return;
   }
+  if (a === 'toggle_prof_card') {
+    if (id && typeof profsExpandidos !== 'undefined' && profsExpandidos) {
+      const cardEl = t.closest('.prof-card');
+      const seraAberto = !profsExpandidos.has(id);
+      if (seraAberto) profsExpandidos.add(id);
+      else profsExpandidos.delete(id);
+      if (cardEl) {
+        cardEl.classList.toggle('is-expanded', seraAberto);
+        t.setAttribute('aria-expanded', seraAberto ? 'true' : 'false');
+      } else {
+        renderModalSystemSettings();
+      }
+    }
+    return;
+  }
+  if (a === 'prof_del_alias') {
+    if (typeof removerApelidoProfessor === 'function') {
+      const res = removerApelidoProfessor(id, t.dataset.val || '');
+      if (res && res.ok) {
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
+        render();
+        toast(res.msg || 'Apelido removido.');
+      } else if (res && res.msg) {
+        toast(res.msg);
+      }
+    }
+    return;
+  }
+  if (a === 'prof_del_subject') {
+    if (typeof removerDisciplinaProfessor === 'function') {
+      const res = removerDisciplinaProfessor(id, t.dataset.val || '');
+      if (res && res.ok) {
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
+        render();
+        toast(res.msg || 'Disciplina removida.');
+      } else if (res && res.msg) {
+        toast(res.msg);
+      }
+    }
+    return;
+  }
+  if (a === 'del_professor') {
+    confirmarExclusao(t, () => {
+      if (typeof removerProfessorCadastro === 'function' && removerProfessorCadastro(id)) {
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
+        render();
+        toast('Professor removido.');
+      }
+    });
+    return;
+  }
+  if (a === 'abrir_prof_cadastro') {
+    if (id && typeof profsExpandidos !== 'undefined' && profsExpandidos) {
+      profsExpandidos.add(id);
+    }
+    if (typeof filtroGestaoProfs !== 'undefined') filtroGestaoProfs = '';
+    abrirModalConfig('professores');
+    setTimeout(() => {
+      const cardEl = document.querySelector(`.prof-card[data-prof-id="${CSS && CSS.escape ? CSS.escape(id || '') : (id || '')}"]`);
+      if (cardEl && typeof cardEl.scrollIntoView === 'function') {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 60);
+    return;
+  }
   if (a === 'ap_unir') {
     if (typeof addApelido === 'function') {
       const res = addApelido(t.dataset.nome, [t.dataset.alt]);
       if (res && res.ok) {
-        save();
+        if (res.prof && typeof profsExpandidos !== 'undefined' && profsExpandidos) {
+          profsExpandidos.add(res.prof.id);
+        }
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
         render();
         toast(res.msg || 'Nomes unidos');
       } else if (res && res.msg) {
@@ -1915,11 +2042,17 @@ document.addEventListener('click', async e => {
       let ultimoAviso = '';
       sugs.forEach(s => {
         const res = addApelido(s.nome, [s.alt]);
-        if (res && res.ok) aplicados++;
+        if (res && res.ok) {
+          aplicados++;
+          if (res.prof && typeof profsExpandidos !== 'undefined' && profsExpandidos) {
+            profsExpandidos.add(res.prof.id);
+          }
+        }
         else if (res && res.msg) ultimoAviso = res.msg;
       });
       if (aplicados > 0) {
-        save();
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
         render();
         toast(`✓ ${aplicados} sugestão(ões) aplicada(s)!`);
       } else {
@@ -2170,16 +2303,34 @@ document.addEventListener('change', async e => {
     }
   }
   if (t.name === 'prof' && t.form && (t.form.dataset.form === 'aula' || t.form.dataset.form === 'aula_manual_nova')) {
-    const canon = typeof profCanon === 'function' ? profCanon(t.value) : t.value.trim();
+    const profObj = typeof buscarProfessorCadastro === 'function' ? buscarProfessorCadastro(t.value) : null;
+    const canon = profObj ? profObj.name : (typeof profCanon === 'function' ? profCanon(t.value) : t.value.trim());
     const perfil = (S.profPerfis && canon) ? S.profPerfis[norm(canon)] : null;
-    if (perfil) {
+    const discPref = (profObj && Array.isArray(profObj.subjects) && profObj.subjects.length ? profObj.subjects[0] : '') || (perfil ? perfil.disciplina : '');
+    const turnoPref = (profObj && profObj.turno) || (perfil ? perfil.turno : '');
+    const salaPref = (profObj && profObj.sala) || (perfil ? perfil.sala : '');
+    if (discPref || turnoPref || salaPref) {
       const inpDesc = t.form.querySelector('input[name="desc"]');
       const selTurno = t.form.querySelector('select[name="turno"]');
       const inpTurma = t.form.querySelector('input[name="turma"]');
-      if (inpDesc && !inpDesc.value.trim() && perfil.disciplina) inpDesc.value = perfil.disciplina;
-      if (selTurno && !selTurno.value && perfil.turno) selTurno.value = perfil.turno;
-      if (inpTurma && !inpTurma.value.trim() && perfil.sala) inpTurma.value = perfil.sala;
+      if (inpDesc && !inpDesc.value.trim() && discPref) inpDesc.value = discPref;
+      if (selTurno && !selTurno.value && turnoPref) selTurno.value = turnoPref;
+      if (inpTurma && !inpTurma.value.trim() && salaPref) inpTurma.value = salaPref;
     }
+  }
+  if (t.id === 'resumoDataIni' || t.id === 'resumoDataFim') {
+    const iniEl = document.getElementById('resumoDataIni');
+    const fimEl = document.getElementById('resumoDataFim');
+    let ini = (iniEl && iniEl.value) ? iniEl.value : (resumoDataIni || hoje);
+    let fim = (fimEl && fimEl.value) ? fimEl.value : (resumoDataFim || ini);
+    if (t.id === 'resumoDataIni' && ini > fim) fim = ini;
+    if (t.id === 'resumoDataFim' && fim < ini) ini = fim;
+    resumoTipoAtual = 'custom';
+    resumoDataIni = ini;
+    resumoDataFim = fim;
+    resumoTextoCustomizado = null;
+    render();
+    return;
   }
   if (t.id === 'rem' && prev) prev.rem = t.checked;
   if (t.id === 'arquivoBackup' && t.files[0]) { processarRestauracao(t.files[0]); t.value = ''; }
@@ -2251,11 +2402,81 @@ document.addEventListener('submit', e => {
     toast('Aula adicionada!');
   }
   
+  if (f === 'prof_novo') {
+    if (typeof criarOuObterProfessor === 'function') {
+      const res = criarOuObterProfessor(d.nome, { disciplina: d.disciplina });
+      if (res && res.prof && typeof profsExpandidos !== 'undefined' && profsExpandidos) {
+        profsExpandidos.add(res.prof.id);
+      }
+      if (res && res.ok) {
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
+        render();
+        toast(res.msg || 'Professor salvo!');
+      } else if (res && res.msg) {
+        if (res.prof) render();
+        toast(res.msg);
+      }
+    }
+    return;
+  }
+
+  if (f === 'prof_add_alias') {
+    const profId = e.target.dataset.id;
+    const aliasVal = (d.alias || '').trim();
+    if (!aliasVal) return;
+    if (typeof adicionarApelidoProfessor === 'function') {
+      const res = adicionarApelidoProfessor(profId, aliasVal);
+      if (typeof profsExpandidos !== 'undefined' && profsExpandidos && profId) {
+        profsExpandidos.add(profId);
+      }
+      if (res && res.ok) {
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
+        render();
+        toast(res.msg || 'Apelido adicionado.');
+        setTimeout(() => {
+          const inp = document.getElementById('inpProfAlias_' + profId);
+          if (inp) inp.focus();
+        }, 30);
+      } else if (res && res.msg) {
+        toast(res.msg);
+      }
+    }
+    return;
+  }
+
+  if (f === 'prof_add_subject') {
+    const profId = e.target.dataset.id;
+    const subjVal = (d.subject || '').trim();
+    if (!subjVal) return;
+    if (typeof adicionarDisciplinaProfessor === 'function') {
+      const res = adicionarDisciplinaProfessor(profId, subjVal);
+      if (typeof profsExpandidos !== 'undefined' && profsExpandidos && profId) {
+        profsExpandidos.add(profId);
+      }
+      if (res && res.ok) {
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
+        render();
+        toast(res.msg || 'Disciplina vinculada.');
+        setTimeout(() => {
+          const inp = document.getElementById('inpProfSubject_' + profId);
+          if (inp) inp.focus();
+        }, 30);
+      } else if (res && res.msg) {
+        toast(res.msg);
+      }
+    }
+    return;
+  }
+
   if (f === 'prof_perfil') {
     if (typeof salvarProfPerfil === 'function') {
       const ok = salvarProfPerfil(d.nome, d.disciplina, d.turno, d.sala);
       if (ok) {
-        save();
+        if (typeof salvarESincronizarAgora === 'function') salvarESincronizarAgora();
+        else save();
         render();
         toast('Ficha do professor salva!');
       } else {

@@ -416,6 +416,7 @@ function uploadCard() {
   const perfisVals = Object.values((S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {}).map(p => (p && p.nome ? p.nome.trim() : '')).filter(Boolean);
   const nomesProfList = [...new Set([
     ...S.aulas.map(a => (a.prof || '').trim()),
+    ...(S.professores || []).map(p => (p && p.name ? p.name.trim() : '')),
     ...(S.apelidos || []).map(a => (a.nome || '').trim()),
     ...perfisVals
   ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
@@ -682,7 +683,8 @@ function viewAulas() {
     const diaBr = br(a.dia); // ex: 31/10
     const diaBrAno = a.dia ? a.dia.split('-').reverse().join('/') : ''; // ex: 31/10/2026
     const diaSemana = wd(a.dia); // ex: seg, ter, sáb
-    const textoCorpus = `${a.prof} ${a.turma} ${a.desc} ${a.turno || ''} ${a.formaEnvio || ''} ${a.dia} ${diaBr} ${diaBrAno} ${diaSemana} ${a.hora}`;
+    const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(a.prof) : (a.prof || '');
+    const textoCorpus = `${profCorpus} ${a.turma} ${a.desc} ${a.turno || ''} ${a.formaEnvio || ''} ${a.dia} ${diaBr} ${diaBrAno} ${diaSemana} ${a.hora}`;
     
     return matchBusca(textoCorpus, termosBusca);
   });
@@ -696,6 +698,7 @@ function viewAulas() {
   const perfisVals = Object.values((S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {}).map(p => (p && p.nome ? p.nome.trim() : '')).filter(Boolean);
   const profsOpts = [...new Set([
     ...S.aulas.map(a => (a.prof || '').trim()),
+    ...(S.professores || []).map(p => (p && p.name ? p.name.trim() : '')),
     ...(S.apelidos || []).map(a => (a.nome || '').trim()),
     ...perfisVals
   ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));

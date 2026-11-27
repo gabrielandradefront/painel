@@ -20,7 +20,8 @@ function viewHoje() {
     const cDia = dataConfirmacaoAula(a.dia);
     if (!(cDia === hoje || (cDia < hoje && !a.confirmada))) return false;
     if (!termosBusca.length) return true;
-    return matchBusca(`${a.prof} ${a.turma} ${a.desc} ${a.turno} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca);
+    const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(a.prof) : (a.prof || '');
+    return matchBusca(`${profCorpus} ${a.turma} ${a.desc} ${a.turno} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca);
   });
   aulasConf.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
   const confPendentes = aulasConf.filter(a => !a.confirmada);
@@ -28,7 +29,8 @@ function viewHoje() {
   const pendDocs = (typeof docDone === 'function' ? G.filter(g => !docDone(g)) : []).filter(g => {
     if (!termosBusca.length) return true;
     const aulasCorpus = g.aulas.map(a => `${a.turma} ${a.hora} ${a.desc}`).join(' ');
-    return matchBusca(`${g.prof} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBusca);
+    const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(g.prof) : (g.prof || '');
+    return matchBusca(`${profCorpus} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBusca);
   });
   const repPend = S.reparos.filter(r => {
     if (r.status === 'Concluído') return false;
@@ -64,7 +66,10 @@ function viewHoje() {
   }
 
   if (termosBusca.length) {
-    matsEnvio = matsEnvio.filter(a => matchBusca(`${a.turma} ${a.desc} ${a.prof} ${a.formaEnvio} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca));
+    matsEnvio = matsEnvio.filter(a => {
+      const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(a.prof) : (a.prof || '');
+      return matchBusca(`${a.turma} ${a.desc} ${profCorpus} ${a.formaEnvio} ${br(a.dia)} ${wd(a.dia)} ${a.hora}`, termosBusca);
+    });
   }
 
   matsEnvio.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));

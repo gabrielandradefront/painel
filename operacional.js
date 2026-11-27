@@ -57,93 +57,271 @@ const docRow = g => {
 
 const docTxt = g => `Professor(a): ${g.prof}\nData: ${g.dia.split('-').reverse().join('/')} (${wd(g.dia)})\nAulas:\n` + g.aulas.map(a => `- ${a.turma} | ${a.hora || 'Sem horário'}${a.desc ? ' | ' + a.desc : ''}`).join('\n');
 
-// --- RESUMOS OPERACIONAIS ---
-function gerarResumoOperacional(tipo) {
-  const am = S.aulas.filter(a => a.dia === amanha);
-  const repPend = S.reparos.filter(r => r.status !== 'Concluído');
-  const orcAguardando = (S.orc.itens || []).filter(i => i.status === 'Aguardando aprovação');
+// --- RESUMOS OPERACIONAIS (REALIZADO VS PLANEJADO POR PERÍODO) ---
+function coletarDadosResumoPeriodo(tipo = 'dia', iniOpt = '', fimOpt = '') {
+  const intervalo = typeof resolverIntervaloResumo === 'function'
+    ? resolverIntervaloResumo(tipo, iniOpt, fimOpt)
+    : {
+        tipo: String(tipo || 'dia'),
+        dataIni: iniOpt || hoje,
+        dataFim: fimOpt || iniOpt || hoje,
+        iniBR: (iniOpt || hoje).split('-').reverse().join('/'),
+        fimBR: (fimOpt || iniOpt || hoje).split('-').reverse().join('/'),
+        dias: 1
+      };
+  const { dataIni, dataFim } = intervalo;
+  const fmtData = d => (typeof brFull === 'function' ? brFull(d) : (d ? d.split('-').reverse().join('/') : ''));
 
-  if (tipo === 'dia') {
-    const pendentesGeral = S.aulas.filter(a => a.dia >= hoje && !a.materialPronto);
-    let matsTxt = '  • Nenhum material pendente.';
-    if (pendentesGeral.length) {
-      const prazosPendentes = [...new Set(pendentesGeral.map(a => prazoEntregaMaterial(a.dia)))].sort();
-      const pData = prazosPendentes[0];
-      const matsLeva = S.aulas.filter(a => a.dia >= hoje && (pData <= hoje ? prazoEntregaMaterial(a.dia) <= hoje : prazoEntregaMaterial(a.dia) === pData) && !a.materialPronto);
-      matsTxt = `  • Prazo: ${wd(pData)} (${br(pData)}) — ${matsLeva.length} turma(s):\n` + matsLeva.map(m => `    - ${m.turma} (${m.prof || 'A definir'})`).join('\n');
-    }
+  const concluidos = [];
+  const planejados = [];
 
-    const confHoje = S.aulas.filter(a => a.dia >= hoje && (dataConfirmacaoAula(a.dia) === hoje || (dataConfirmacaoAula(a.dia) < hoje && !a.confirmada)));
-    confHoje.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
-
-    const confTxt = confHoje.length
-      ? confHoje.map(a => `  • ${a.prof || 'Sem prof'} — ${a.turma} (${wd(a.dia)} ${br(a.dia)} às ${a.hora || 'S/H'}) [${a.confirmada ? '✓ Confirmada' : '◷ Pendente'}]`).join('\n')
-      : '  • Nenhuma aula para confirmar hoje.';
-
-    const repTxt = repPend.length
-      ? repPend.slice(0, 4).map(r => `  • ${r.local ? `[${r.local}] ` : ''}${r.item}`).join('\n') + (repPend.length > 4 ? `\n  • ...e mais ${repPend.length - 4} chamado(s)` : '')
-      : '  • Nenhum chamado aberto.';
-
-    const G = groups(mon(0), addD(mon(0), 6));
-    const docsPendQtd = docPend(G);
-
-    let msg = `*☀\uFE0E ARGOS OPS • BRIEFING OPERACIONAL — ${br(hoje)} (${wd(hoje).toUpperCase()})*\n\n`;
-    msg += `▪ *Recibos Pendentes (Semana Atual):* ${docsPendQtd} pendência(s)\n`;
-    msg += `▪ *Confirmações de Aula:*\n${confTxt}\n\n`;
-    msg += `▪ *Manutenções Pendentes (${repPend.length}):*\n${repTxt}\n\n`;
-    msg += `▪ *Docs Pendentes (Semana Atual):* ${docsPendQtd} contrato(s)/recibo(s)\n`;
-    if (orcAguardando.length) {
-      msg += `▪ *Orçamentos Aguardando Aprovação:* ${orcAguardando.length} fornecedor(es)\n`;
-    }
-    return msg;
-  }
-
-  // Resumos Compilados (1, 2, 3 ou 4 semanas / mês)
-  const nSem = parseInt(tipo, 10);
-  const nDias = nSem * 7;
-  const dataFim = addD(hoje, nDias);
-  const tituloPeriodo = nSem === 4 ? 'DO MÊS (4 SEMANAS)' : `DE ${nSem} SEMANA${nSem > 1 ? 'S' : ''}`;
-
-  const aulasPeriodo = S.aulas.filter(a => a.dia >= hoje && a.dia <= dataFim);
-  aulasPeriodo.sort((a, b) => (a.dia + a.hora).localeCompare(b.dia + b.hora));
-
-  const turmasContagem = {};
+  // 1. Aulas / Cronogramas no intervalo selecionado
+  const aulasPeriodo = (S.aulas || []).filter(a => typeof a.dia === 'string' && a.dia >= dataIni && a.dia <= dataFim);
   aulasPeriodo.forEach(a => {
-    turmasContagem[a.turma] = (turmasContagem[a.turma] || 0) + 1;
+    const profNome = (typeof profCanon === 'function' ? profCanon(a.prof || '') : (a.prof || '')).trim() || 'Sem professor';
+    const turma = (a.turma || '').trim();
+    const disc = (a.desc || '').trim();
+    const hora = (a.hora || '').trim();
+    const turno = (a.turno || '').trim();
+    const titulo = turma || disc || 'Aula agendada';
+    const detalhes = [profNome, disc && turma ? disc : '', hora ? `às ${hora}` : '', turno].filter(Boolean).join(' • ');
+
+    if (a.confirmada) {
+      concluidos.push({
+        categoria: 'Aula',
+        dia: a.dia,
+        hora,
+        prof: profNome,
+        turma,
+        disciplina: disc,
+        titulo,
+        detalhes,
+        status: 'Aula confirmada / realizada',
+        etapa: 'CONCLUÍDO'
+      });
+    } else {
+      planejados.push({
+        categoria: 'Aula',
+        dia: a.dia,
+        hora,
+        prof: profNome,
+        turma,
+        disciplina: disc,
+        titulo,
+        detalhes,
+        status: 'Aguardando confirmação da aula',
+        pendencia: 'aguardando confirmação',
+        etapa: 'PENDENTE'
+      });
+    }
   });
-  const turmasLista = Object.entries(turmasContagem).map(([t, q]) => `  • ${t}: ${q} aula(s)`).join('\n') || '  • Nenhuma aula agendada no período.';
 
-  const matsPrevistos = aulasPeriodo.filter(a => {
-    const p = prazoEntregaMaterial(a.dia);
-    return p >= hoje && p <= dataFim;
+  // 2. Entregas de Material / PPT dentro do período (data da aula ou prazo de entrega no intervalo)
+  const matsPeriodo = (S.aulas || []).filter(a => {
+    if (typeof a.dia !== 'string') return false;
+    const prazo = typeof prazoEntregaMaterial === 'function' ? prazoEntregaMaterial(a.dia) : a.dia;
+    const aulaNoPeriodo = a.dia >= dataIni && a.dia <= dataFim;
+    const prazoNoPeriodo = typeof prazo === 'string' && prazo >= dataIni && prazo <= dataFim;
+    return aulaNoPeriodo || prazoNoPeriodo;
   });
-  const matsPendentesQtd = matsPrevistos.filter(a => !a.materialPronto).length;
 
-  const G_periodo = groups(hoje, dataFim);
-  const docsPendQtd = docPend(G_periodo);
+  matsPeriodo.forEach(a => {
+    const profNome = (typeof profCanon === 'function' ? profCanon(a.prof || '') : (a.prof || '')).trim() || 'A definir';
+    const turma = (a.turma || '').trim() || 'Turma';
+    const disc = (a.desc || '').trim();
+    const hora = (a.hora || '').trim();
+    const envio = (a.formaEnvio || '').trim();
+    const prazo = typeof prazoEntregaMaterial === 'function' ? prazoEntregaMaterial(a.dia) : a.dia;
+    const prazoInfo = (prazo && prazo !== a.dia) ? `Prazo PPT: ${fmtData(prazo)}` : '';
+    const titulo = `${turma}${disc ? ' — ' + disc : ''}`;
+    const detalhes = [profNome, envio ? `Via ${envio}` : '', prazoInfo].filter(Boolean).join(' • ');
 
-  let msg = `*▤ ARGOS OPS • RESUMO OPERACIONAL COMPILADO ${tituloPeriodo}*\n`;
-  msg += `▪ *Período:* ${br(hoje)} a ${br(dataFim)} (${nDias} dias)\n\n`;
-  msg += `▪ *Quadro de Aulas (${aulasPeriodo.length} aulas agendadas):*\n${turmasLista}\n\n`;
-  msg += `▪ *Envios de Materiais (Slides):* ${matsPrevistos.length} previsto(s) (${matsPendentesQtd} pendente(s))\n`;
-  msg += `▪ *Recibos e Aprovações:* ${G_periodo.length} grupo(s) de docentes (${docsPendQtd} pendência(s))\n`;
-  msg += `▪ *Manutenções:* ${repPend.length} chamado(s) em aberto\n`;
+    if (a.materialPronto) {
+      concluidos.push({
+        categoria: 'Material / PPT',
+        dia: a.dia,
+        hora,
+        prof: profNome,
+        turma,
+        disciplina: disc,
+        titulo,
+        detalhes: [profNome, envio ? `Via ${envio}` : ''].filter(Boolean).join(' • '),
+        status: envio ? `Material/PPT enviado (${envio})` : 'Material/PPT enviado',
+        etapa: 'ENVIADO'
+      });
+    } else {
+      planejados.push({
+        categoria: 'Material / PPT',
+        dia: a.dia,
+        hora,
+        prof: profNome,
+        turma,
+        disciplina: disc,
+        titulo,
+        detalhes,
+        status: prazoInfo ? `Aguardando envio do material/PPT (${prazoInfo})` : 'Aguardando envio do material/PPT',
+        pendencia: 'aguardando envio do material/PPT',
+        etapa: 'PENDENTE'
+      });
+    }
+  });
 
-  if (S.orc.titulo) {
-    msg += `▪ *Cotação Atual:* ${S.orc.titulo} (${S.orc.itens.length} fornecedores)\n`;
-  }
+  // 3. Contratos / Recibos Docentes no período
+  const gruposPeriodo = typeof groups === 'function' ? groups(dataIni, dataFim) : [];
+  gruposPeriodo.forEach(g => {
+    const d = (S.docs && S.docs[g.k]) ? S.docs[g.k] : {};
+    const hasRecibo = !!d.recibo;
+    const hasAprovado = !!d.aprovado;
+    const hasEnviado = !!d.enviado;
+    const hora0 = (g.aulas && g.aulas[0] && g.aulas[0].hora) ? g.aulas[0].hora : '';
+    const turmasDesc = (g.aulas || [])
+      .map(au => `${au.turma || ''}${au.desc ? ' (' + au.desc + ')' : ''}`)
+      .filter(Boolean)
+      .join(' + ');
+
+    if (hasEnviado) {
+      const etapasFeitas = [hasRecibo ? 'RECIBO' : '', hasAprovado ? 'APROVADO' : '', 'ENVIADO'].filter(Boolean);
+      const statusStr = etapasFeitas.length === 3 ? 'ENVIADO (Concluído)' : `ENVIADO (${etapasFeitas.join(' + ')})`;
+      concluidos.push({
+        categoria: 'Contrato / Recibo',
+        dia: g.dia,
+        hora: hora0,
+        prof: g.prof,
+        turma: turmasDesc,
+        disciplina: '',
+        titulo: g.prof,
+        detalhes: turmasDesc,
+        status: statusStr,
+        etapa: 'ENVIADO'
+      });
+    } else {
+      const feitas = [hasRecibo ? 'RECIBO' : '', hasAprovado ? 'APROVADO' : ''].filter(Boolean);
+      const faltam = [!hasRecibo ? 'RECIBO' : '', !hasAprovado ? 'APROVADO' : '', 'ENVIADO'].filter(Boolean);
+      const etapaAtual = feitas.length
+        ? (feitas.length === 1 ? `Apenas ${feitas[0]}` : feitas.join(' + '))
+        : 'Pendente';
+      const faltandoTxt = faltam.length > 1
+        ? `aguardando ${faltam.slice(0, -1).join(', ')} e ${faltam[faltam.length - 1]}`
+        : `aguardando ${faltam[0]}`;
+
+      planejados.push({
+        categoria: 'Contrato / Recibo',
+        dia: g.dia,
+        hora: hora0,
+        prof: g.prof,
+        turma: turmasDesc,
+        disciplina: '',
+        titulo: g.prof,
+        detalhes: turmasDesc,
+        status: `${etapaAtual} — ${faltandoTxt}`,
+        pendencia: faltandoTxt,
+        etapa: feitas.join('+') || 'PENDENTE'
+      });
+    }
+  });
+
+  // 4. Manutenções e Reparos com data no intervalo
+  (S.reparos || []).forEach(r => {
+    const concluido = r.status === 'Concluído' || !!r.feito;
+    if (concluido && typeof r.dataConc === 'string' && r.dataConc >= dataIni && r.dataConc <= dataFim) {
+      concluidos.push({
+        categoria: 'Manutenção',
+        dia: r.dataConc,
+        hora: '',
+        prof: r.resp || '',
+        turma: r.local || '',
+        disciplina: '',
+        titulo: `${r.local ? `[${r.local}] ` : ''}${r.item || 'Reparo'}`,
+        detalhes: r.resp ? `Resp.: ${r.resp}` : '',
+        status: 'Manutenção concluída',
+        etapa: 'CONCLUÍDO'
+      });
+    } else if (!concluido && typeof r.dataReg === 'string' && r.dataReg >= dataIni && r.dataReg <= dataFim) {
+      const pendTxt = r.status === 'Em andamento' ? 'aguardando conclusão' : 'aguardando execução';
+      planejados.push({
+        categoria: 'Manutenção',
+        dia: r.dataReg,
+        hora: '',
+        prof: r.resp || '',
+        turma: r.local || '',
+        disciplina: '',
+        titulo: `${r.local ? `[${r.local}] ` : ''}${r.item || 'Reparo'}`,
+        detalhes: r.resp ? `Resp.: ${r.resp}` : '',
+        status: `${r.status || 'Pendente'} — ${pendTxt}`,
+        pendencia: pendTxt,
+        etapa: r.status === 'Em andamento' ? 'EM ANDAMENTO' : 'PENDENTE'
+      });
+    }
+  });
+
+  const ordenarItens = (a, b) =>
+    String(a.dia || '').localeCompare(String(b.dia || '')) ||
+    String(a.hora || '').localeCompare(String(b.hora || '')) ||
+    String(a.categoria || '').localeCompare(String(b.categoria || ''), 'pt-BR') ||
+    String(a.titulo || '').localeCompare(String(b.titulo || ''), 'pt-BR');
+
+  concluidos.sort(ordenarItens);
+  planejados.sort(ordenarItens);
+
+  const totalConcluidos = concluidos.length;
+  const totalPlanejados = planejados.length;
+  const totalGeral = totalConcluidos + totalPlanejados;
+  const headerResumo = `Período: ${intervalo.iniBR} a ${intervalo.fimBR} | ✓ Concluídos: ${totalConcluidos} | ◷ Planejados/Pendentes: ${totalPlanejados} | Total: ${totalGeral}`;
+
+  return {
+    intervalo,
+    concluidos,
+    planejados,
+    totalConcluidos,
+    totalPlanejados,
+    totalGeral,
+    headerResumo
+  };
+}
+
+function formatarLinhaItemResumoTxt(item) {
+  const dataFmt = typeof brFull === 'function' ? brFull(item.dia) : (item.dia ? item.dia.split('-').reverse().join('/') : '');
+  const alvo = item.detalhes ? `${item.titulo} (${item.detalhes})` : item.titulo;
+  return `• ${dataFmt} • [${item.categoria}] ${alvo} — ${item.status}`;
+}
+
+function gerarResumoOperacional(tipo = 'dia', iniOpt = '', fimOpt = '') {
+  const dados = coletarDadosResumoPeriodo(tipo, iniOpt, fimOpt);
+  const { concluidos, planejados, totalConcluidos, totalPlanejados, headerResumo } = dados;
+
+  const blocoRealizado = concluidos.length
+    ? concluidos.map(formatarLinhaItemResumoTxt).join('\n')
+    : '• Nenhum item concluído neste período.';
+
+  const blocoPlanejado = planejados.length
+    ? planejados.map(formatarLinhaItemResumoTxt).join('\n')
+    : '• Nenhum item planejado ou pendente neste período.';
+
+  let msg = `*ARGOS OPS • RESUMO POR PERÍODO*\n`;
+  msg += `${headerResumo}\n\n`;
+  msg += `*✓ REALIZADO NO PERÍODO (${totalConcluidos})*\n`;
+  msg += `${blocoRealizado}\n\n`;
+  msg += `*◷ PLANEJADO / PENDENTE NO PERÍODO (${totalPlanejados})*\n`;
+  msg += `${blocoPlanejado}`;
   return msg;
 }
 
-// --- GESTÃO DE PROFESSORES (APELIDOS) ---
+// --- GESTÃO DE PROFESSORES (NOME COMPLETO, APELIDOS E DISCIPLINAS) ---
 function profCanon(p) {
-  const n = norm(p); if (!n) return p;
-  for (const e of (S.apelidos || [])) if (norm(e.nome) === n || (e.alts || []).some(x => norm(x) === n)) return e.nome;
+  const n = norm(p);
+  if (!n) return p;
+  if (typeof buscarProfessorCadastro === 'function') {
+    const cad = buscarProfessorCadastro(p);
+    if (cad && cad.name) return cad.name;
+  }
+  for (const e of (S.apelidos || [])) {
+    if (norm(e.nome) === n || (e.alts || []).some(x => norm(x) === n)) return e.nome;
+  }
   return p;
 }
 
 function unirDocs(canon, alts) {
-  const ns = new Set(alts.map(norm)), nc = norm(canon);
+  const ns = new Set((alts || []).map(norm)), nc = norm(canon);
   Object.keys(S.docs).forEach(k => {
     const i = k.lastIndexOf('|'), nm = k.slice(0, i), dia = k.slice(i + 1);
     if (!ns.has(nm) || nm === nc) return;
@@ -151,6 +329,180 @@ function unirDocs(canon, alts) {
     S.docs[novo] = { recibo: !!(a.recibo || b.recibo), aprovado: !!(a.aprovado || b.aprovado), enviado: !!(a.enviado || b.enviado) };
     delete S.docs[k];
   });
+}
+
+function garantirListaProfessores() {
+  if (!Array.isArray(S.professores)) {
+    S.professores = typeof normalizarProfessores === 'function'
+      ? normalizarProfessores([], S.apelidos, S.profPerfis, true)
+      : [];
+  }
+  return S.professores;
+}
+
+function criarOuObterProfessor(nomeRaw, opts = {}) {
+  const nomeLimpo = String(nomeRaw ?? '').trim();
+  if (!nomeLimpo) return { ok: false, msg: 'Informe o nome completo do professor.' };
+
+  const lista = garantirListaProfessores();
+  const nk = norm(nomeLimpo);
+  const existentePorNome = lista.find(p => norm(p.name) === nk);
+  if (existentePorNome) {
+    let alterou = false;
+    const disc = String(opts.disciplina || opts.subject || '').trim();
+    if (disc && !existentePorNome.subjects.some(s => norm(s) === norm(disc))) {
+      existentePorNome.subjects.push(disc);
+      existentePorNome.subjects.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+      alterou = true;
+    }
+    if (opts.turno && !existentePorNome.turno) { existentePorNome.turno = String(opts.turno).trim(); alterou = true; }
+    if (opts.sala && !existentePorNome.sala) { existentePorNome.sala = String(opts.sala).trim(); alterou = true; }
+    if (alterou && typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+    return {
+      ok: true,
+      existente: true,
+      prof: existentePorNome,
+      msg: alterou ? `Cadastro de "${existentePorNome.name}" atualizado.` : `"${existentePorNome.name}" já está cadastrado.`
+    };
+  }
+
+  const existentePorApelido = lista.find(p => (p.aliases || []).some(a => norm(a) === nk));
+  if (existentePorApelido) {
+    return {
+      ok: false,
+      existente: true,
+      prof: existentePorApelido,
+      msg: `⚠\uFE0E "${nomeLimpo}" já é apelido de "${existentePorApelido.name}".`
+    };
+  }
+
+  const subjects = [];
+  const discInicial = String(opts.disciplina || opts.subject || '').trim();
+  if (discInicial) subjects.push(discInicial);
+
+  const novo = {
+    id: 'prof_' + uid(),
+    name: nomeLimpo,
+    aliases: [],
+    subjects,
+    turno: String(opts.turno || '').trim(),
+    sala: String(opts.sala || '').trim()
+  };
+  lista.push(novo);
+  if (typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+  return { ok: true, existente: false, prof: novo, msg: `Professor "${novo.name}" cadastrado!` };
+}
+
+function adicionarApelidoProfessor(profId, aliasRaw) {
+  const lista = garantirListaProfessores();
+  const prof = lista.find(p => p.id === profId);
+  if (!prof) return { ok: false, msg: 'Professor não encontrado.' };
+
+  const entradas = (Array.isArray(aliasRaw) ? aliasRaw : String(aliasRaw ?? '').split(','))
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+  if (!entradas.length) return { ok: false, msg: 'Informe um apelido.' };
+
+  const adicionados = [];
+  for (const cand of entradas) {
+    const nc = norm(cand);
+    if (!nc) continue;
+    if (nc === norm(prof.name)) {
+      if (entradas.length === 1) return { ok: false, msg: 'O apelido não pode ser igual ao nome completo.' };
+      continue;
+    }
+    if ((prof.aliases || []).some(a => norm(a) === nc)) {
+      if (entradas.length === 1) return { ok: false, msg: `Apelido "${cand}" já existe neste cadastro.` };
+      continue;
+    }
+    const outroOficial = lista.find(p => p.id !== prof.id && norm(p.name) === nc);
+    if (outroOficial) {
+      return { ok: false, msg: `⚠\uFE0E "${cand}" já está cadastrado como professor ("${outroOficial.name}").` };
+    }
+    const outroVinculo = lista.find(p => p.id !== prof.id && (p.aliases || []).some(a => norm(a) === nc));
+    if (outroVinculo) {
+      return { ok: false, msg: `⚠\uFE0E "${cand}" já está vinculado como apelido de "${outroVinculo.name}".` };
+    }
+    prof.aliases = Array.isArray(prof.aliases) ? prof.aliases : [];
+    prof.aliases.push(cand);
+    adicionados.push(cand);
+  }
+
+  if (!adicionados.length) {
+    return { ok: false, msg: 'Nenhum apelido novo para adicionar.' };
+  }
+
+  prof.aliases.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  unirDocs(prof.name, prof.aliases);
+  if (typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+  return {
+    ok: true,
+    adicionados,
+    prof,
+    msg: adicionados.length === 1 ? `Apelido "${adicionados[0]}" adicionado.` : `${adicionados.length} apelidos adicionados.`
+  };
+}
+
+function removerApelidoProfessor(profId, aliasVal) {
+  const lista = garantirListaProfessores();
+  const prof = lista.find(p => p.id === profId);
+  if (!prof) return { ok: false, msg: 'Professor não encontrado.' };
+  const alvo = norm(aliasVal);
+  const antes = (prof.aliases || []).length;
+  prof.aliases = (prof.aliases || []).filter(a => norm(a) !== alvo);
+  if (prof.aliases.length === antes) return { ok: false, msg: 'Apelido não encontrado.' };
+  if (typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+  return { ok: true, prof, msg: `Apelido "${aliasVal}" removido.` };
+}
+
+function adicionarDisciplinaProfessor(profId, subjRaw) {
+  const lista = garantirListaProfessores();
+  const prof = lista.find(p => p.id === profId);
+  if (!prof) return { ok: false, msg: 'Professor não encontrado.' };
+  const val = String(subjRaw ?? '').trim();
+  if (!val) return { ok: false, msg: 'Informe uma disciplina.' };
+  prof.subjects = Array.isArray(prof.subjects) ? prof.subjects : [];
+  if (prof.subjects.some(s => norm(s) === norm(val))) {
+    return { ok: false, msg: `Disciplina "${val}" já vinculada a este professor.` };
+  }
+  prof.subjects.push(val);
+  prof.subjects.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  if (typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+  return { ok: true, prof, msg: `Disciplina "${val}" vinculada.` };
+}
+
+function removerDisciplinaProfessor(profId, subjVal) {
+  const lista = garantirListaProfessores();
+  const prof = lista.find(p => p.id === profId);
+  if (!prof) return { ok: false, msg: 'Professor não encontrado.' };
+  const alvo = norm(subjVal);
+  const antes = (prof.subjects || []).length;
+  prof.subjects = (prof.subjects || []).filter(s => norm(s) !== alvo);
+  if (prof.subjects.length === antes) return { ok: false, msg: 'Disciplina não encontrada.' };
+  if (typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+  return { ok: true, prof, msg: `Disciplina "${subjVal}" removida.` };
+}
+
+function atualizarExtrasProfessor(profId, campo, valor) {
+  if (campo !== 'turno' && campo !== 'sala') return false;
+  const lista = garantirListaProfessores();
+  const prof = lista.find(p => p.id === profId);
+  if (!prof) return false;
+  prof[campo] = String(valor ?? '').trim();
+  if (typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+  return true;
+}
+
+function removerProfessorCadastro(profId) {
+  const lista = garantirListaProfessores();
+  const alvo = lista.find(p => p.id === profId);
+  if (!alvo) return false;
+  S.professores = lista.filter(p => p.id !== profId);
+  if (typeof profsExpandidos !== 'undefined' && profsExpandidos && typeof profsExpandidos.delete === 'function') {
+    profsExpandidos.delete(profId);
+  }
+  if (typeof sincronizarLegadoProfessores === 'function') sincronizarLegadoProfessores(S);
+  return true;
 }
 
 function analisarApelido(nome, alts) {
@@ -167,35 +519,35 @@ function analisarApelido(nome, alts) {
     altsLimpos.push(a);
   }
 
-  const lista = S.apelidos || [];
+  const lista = garantirListaProfessores();
   const nNome = norm(nomeLimpo);
-  const oficialExistente = nNome ? lista.find(x => norm(x.nome) === nNome) : null;
-  const nomeComoApelido = nNome ? lista.find(x => (x.alts || []).some(a => norm(a) === nNome)) : null;
+  const oficialExistente = nNome ? lista.find(x => norm(x.name) === nNome) : null;
+  const nomeComoApelido = nNome ? lista.find(x => (x.aliases || []).some(a => norm(a) === nNome)) : null;
 
   if (nomeComoApelido) {
     return {
       ok: false,
       motivo: 'conflito_nome',
-      msg: `⚠\uFE0E "${nomeLimpo}" já está vinculado como apelido de "${nomeComoApelido.nome}". Desfaça o vínculo anterior primeiro.`
+      msg: `⚠\uFE0E "${nomeLimpo}" já está vinculado como apelido de "${nomeComoApelido.name}".`
     };
   }
 
   for (const alt of altsLimpos) {
     const nAlt = norm(alt);
-    const outroOficial = lista.find(x => x !== oficialExistente && norm(x.nome) === nAlt);
+    const outroOficial = lista.find(x => x !== oficialExistente && norm(x.name) === nAlt);
     if (outroOficial) {
       return {
         ok: false,
         motivo: 'conflito_alt',
-        msg: `⚠\uFE0E O apelido "${alt}" já está cadastrado como professor oficial ("${outroOficial.nome}"). Desfaça o vínculo anterior primeiro.`
+        msg: `⚠\uFE0E O apelido "${alt}" já está cadastrado como professor ("${outroOficial.name}").`
       };
     }
-    const outroVinculo = lista.find(x => x !== oficialExistente && (x.alts || []).some(a => norm(a) === nAlt));
+    const outroVinculo = lista.find(x => x !== oficialExistente && (x.aliases || []).some(a => norm(a) === nAlt));
     if (outroVinculo) {
       return {
         ok: false,
         motivo: 'conflito_alt',
-        msg: `⚠\uFE0E O apelido "${alt}" já está vinculado a "${outroVinculo.nome}". Desfaça o vínculo anterior primeiro.`
+        msg: `⚠\uFE0E O apelido "${alt}" já está vinculado a "${outroVinculo.name}".`
       };
     }
   }
@@ -206,18 +558,18 @@ function analisarApelido(nome, alts) {
         ok: false,
         motivo: 'info_oficial',
         existente: oficialExistente,
-        msg: `ℹ\uFE0E "${oficialExistente.nome}" já está na lista (${(oficialExistente.alts || []).length} apelido(s)). Informe novos apelidos para mesclar.`
+        msg: `ℹ\uFE0E "${oficialExistente.name}" já está cadastrado (${(oficialExistente.aliases || []).length} apelido(s)).`
       };
     }
     return {
       ok: false,
       motivo: 'vazio',
-      msg: '⚠\uFE0E Informe o nome oficial e pelo menos um outro nome diferente.'
+      msg: '⚠\uFE0E Informe o nome completo e pelo menos um apelido diferente.'
     };
   }
 
   if (oficialExistente) {
-    const novosAlts = altsLimpos.filter(a => !(oficialExistente.alts || []).some(y => norm(y) === norm(a)));
+    const novosAlts = altsLimpos.filter(a => !(oficialExistente.aliases || []).some(y => norm(y) === norm(a)));
     if (!novosAlts.length) {
       return {
         ok: false,
@@ -229,7 +581,7 @@ function analisarApelido(nome, alts) {
       ok: true,
       motivo: 'mesclado',
       existente: oficialExistente,
-      nome: oficialExistente.nome,
+      nome: oficialExistente.name,
       novosAlts
     };
   }
@@ -243,39 +595,27 @@ function analisarApelido(nome, alts) {
 }
 
 function addApelido(nome, alts) {
-  S.apelidos = S.apelidos || [];
   const analise = analisarApelido(nome, alts);
   if (!analise.ok) return analise;
 
-  let entry = analise.existente;
-  if (!entry) {
-    entry = { id: uid(), nome: analise.nome, alts: [] };
-    S.apelidos.push(entry);
+  let prof = analise.existente;
+  if (!prof) {
+    const criado = criarOuObterProfessor(analise.nome);
+    if (!criado.ok) return criado;
+    prof = criado.prof;
   }
 
-  analise.novosAlts.forEach(a => {
-    if (norm(a) !== norm(entry.nome) && !entry.alts.some(y => norm(y) === norm(a))) {
-      entry.alts.push(a);
-    }
-  });
-  entry.alts.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-
-  unirDocs(entry.nome, entry.alts);
-
-  if (analise.motivo === 'mesclado') {
-    return {
-      ok: true,
-      motivo: 'mesclado',
-      nome: entry.nome,
-      msg: `ℹ\uFE0E "${entry.nome}" já estava na lista — novos apelidos foram mesclados!`
-    };
-  }
+  const resAdd = adicionarApelidoProfessor(prof.id, analise.novosAlts);
+  if (!resAdd.ok) return resAdd;
 
   return {
     ok: true,
-    motivo: 'criado',
-    nome: entry.nome,
-    msg: `✓ Nomes unidos para "${entry.nome}"!`
+    motivo: analise.motivo,
+    nome: prof.name,
+    prof,
+    msg: analise.motivo === 'mesclado'
+      ? `ℹ\uFE0E Apelidos mesclados ao cadastro de "${prof.name}"!`
+      : `✓ Nomes unidos para "${prof.name}"!`
   };
 }
 
@@ -296,64 +636,41 @@ function sugApelidos() {
 }
 
 function salvarProfPerfil(nome, disciplina = '', turno = '', sala = '') {
-  const nomeLimpo = (nome || '').trim();
-  if (!nomeLimpo) return false;
-  const canon = typeof profCanon === 'function' ? profCanon(nomeLimpo) : nomeLimpo;
-  const key = norm(canon);
-  if (!key || key === '__proto__' || key === 'constructor' || key === 'prototype') return false;
-  S.profPerfis = (S.profPerfis && typeof S.profPerfis === 'object' && !Array.isArray(S.profPerfis)) ? S.profPerfis : {};
-  const atual = S.profPerfis[key] || { nome: canon, disciplina: '', turno: '', sala: '' };
-  S.profPerfis[key] = {
-    nome: canon,
-    disciplina: String(disciplina ?? atual.disciplina ?? '').trim(),
-    turno: String(turno ?? atual.turno ?? '').trim(),
-    sala: String(sala ?? atual.sala ?? '').trim()
-  };
+  const res = criarOuObterProfessor(nome, { disciplina, turno, sala });
+  if (!res || !res.ok || !res.prof) return false;
+  if (disciplina) adicionarDisciplinaProfessor(res.prof.id, disciplina);
+  if (turno !== undefined && turno !== '') atualizarExtrasProfessor(res.prof.id, 'turno', turno);
+  if (sala !== undefined && sala !== '') atualizarExtrasProfessor(res.prof.id, 'sala', sala);
   return true;
+}
+
+function formatarMetaProfessor(prof) {
+  const nAl = Array.isArray(prof.aliases) ? prof.aliases.length : 0;
+  const nSub = Array.isArray(prof.subjects) ? prof.subjects.length : 0;
+  const partes = [];
+  if (nAl > 0) partes.push(`${nAl} ${nAl === 1 ? 'apelido' : 'apelidos'}`);
+  if (nSub > 0) partes.push(`${nSub} ${nSub === 1 ? 'disciplina' : 'disciplinas'}`);
+  return partes.join(' • ');
 }
 
 function cardApelidos() {
   const sug = sugApelidos();
-  const ap = S.apelidos || [];
-  const apOrd = [...ap].sort((a, b) =>
-    (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
+  const profs = garantirListaProfessores();
+  const profsOrd = [...profs].sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' })
   );
-  const perfisMap = (S.profPerfis && typeof S.profPerfis === 'object') ? S.profPerfis : {};
-  const perfisOrd = Object.entries(perfisMap)
-    .filter(([, p]) => p && p.nome)
-    .sort(([, a], [, b]) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
 
-  const nomes = [...new Set([
-    ...nomesProf(),
-    ...ap.map(e => (e.nome || '').trim()),
-    ...perfisOrd.map(([, p]) => (p.nome || '').trim())
+  const filtroRaw = typeof filtroGestaoProfs === 'string' ? filtroGestaoProfs.trim() : '';
+  const termosFiltro = filtroRaw ? norm(filtroRaw).split(/\s+/).filter(Boolean) : [];
+  const profsFiltrados = termosFiltro.length
+    ? profsOrd.filter(p => matchBusca(`${p.name} ${(p.aliases || []).join(' ')} ${(p.subjects || []).join(' ')} ${p.turno || ''} ${p.sala || ''}`, termosFiltro))
+    : profsOrd;
+
+  const nomesSugestaoCadastro = [...new Set([
+    ...nomesProf().filter(n => !buscarProfessorCadastro || !buscarProfessorCadastro(n))
   ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
 
-  const mapaOficiais = new Map(ap.map(e => [norm(e.nome), e]));
-  const mapaAlts = new Map();
-  ap.forEach(e => (e.alts || []).forEach(alt => mapaAlts.set(norm(alt), e)));
-
-  const optionsDatalist = nomes.map(n => {
-    const nn = norm(n);
-    if (mapaOficiais.has(nn)) {
-      return `<option value="${esc(n)}" label="${esc(n)} (já unido)"></option>`;
-    }
-    if (mapaAlts.has(nn)) {
-      const dono = mapaAlts.get(nn);
-      return `<option value="${esc(n)}" label="${esc(n)} (apelido de ${esc(dono.nome)})"></option>`;
-    }
-    return `<option value="${esc(n)}"></option>`;
-  }).join('');
-
   const disciplinasList = typeof getPresetList === 'function' ? getPresetList('professores', 'disciplinas') : [];
-  const turnosList = typeof getPresetList === 'function' ? getPresetList('professores', 'turnos') : [];
-  const salasList = typeof getPresetList === 'function' ? getPresetList('professores', 'salas') : [];
-  const optHtml = (list, sel, ph) => typeof renderPresetSelectOptions === 'function'
-    ? renderPresetSelectOptions(list, sel, ph, true)
-    : `<option value="">${esc(ph)}</option>` + list.map(v => `<option value="${esc(v)}" ${norm(v) === norm(sel) ? 'selected' : ''}>${esc(v)}</option>`).join('');
-  const gear = (sub, title) => typeof presetGearBtn === 'function' ? presetGearBtn('professores', sub, '\u2699\uFE0E', title) : '';
-
-  const aberto = typeof apelidosAberto !== 'undefined' ? apelidosAberto : false;
 
   const profSchema = typeof PROF_PRESET_SCHEMA !== 'undefined' ? PROF_PRESET_SCHEMA : [
     { key: 'disciplinas', label: 'Disciplinas / Áreas', placeholder: 'Nova disciplina / área de atuação...' },
@@ -366,12 +683,12 @@ function cardApelidos() {
   const profSubObj = profSchema.find(s => s.key === profSubAtiva) || profSchema[0];
   const profItensAtivos = typeof getPresetList === 'function' ? getPresetList('professores', profSubAtiva) : [];
 
-  let blocoProfPresets = `
+  const blocoProfPresets = `
     <div class="prof-presets-panel">
       <div class="prof-presets-head">
         <div>
           <h3 style="margin:0;"><span class="ui-glyph" aria-hidden="true">\u2699\uFE0E</span> Disciplinas, Turnos & Salas / Turmas</h3>
-          <div class="mu" style="font-size:12px;">Gerencie aqui as opções usadas nas fichas de professores e no lançamento de aulas.</div>
+          <div class="mu" style="font-size:12px;">Opções predefinidas disponíveis para vincular aos professores e ao quadro de aulas.</div>
         </div>
       </div>
       <div class="prof-presets-tabs" role="tablist" aria-label="Listas de professores">
@@ -392,7 +709,7 @@ function cardApelidos() {
           return `
             <div class="preset-chip">
               <span>${esc(val)}</span>
-              <button type="button" class="preset-chip-del" data-act="preset_del" data-cat="professores" data-sub="${esc(profSubAtiva)}" data-val="${esc(val)}" title="Remover">×</button>
+              <button type="button" class="preset-chip-del" data-act="preset_del" data-cat="professores" data-sub="${esc(profSubAtiva)}" data-val="${esc(val)}" title="Remover">✕</button>
             </div>
           `;
         }).join('') || '<span class="mu" style="font-size:12px; font-style:italic;">Nenhuma opção cadastrada nesta lista.</span>'}
@@ -400,154 +717,200 @@ function cardApelidos() {
     </div>
   `;
 
-  let h = blocoProfPresets + `
-    <div style="margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--bd);">
-      <h3 style="margin:0 0 6px;">Ficha de Professores (Disciplina / Área, Turno & Sala)</h3>
-      <div class="mu" style="margin-bottom:10px; font-size:12.5px;">Vincule área de atuação/disciplina, turno e sala ou turma padrão para cada docente.</div>
-      <datalist id="profsFichaList">${nomes.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
-      <form data-form="prof_perfil" class="prof-ficha-form form-grid-compact">
-        <div class="field-group">
-          <label class="field-label">Professor(a)</label>
-          <input name="nome" list="profsFichaList" placeholder="Nome do professor(a)..." required autocomplete="off">
+  const blocoNovoProfessor = `
+    <div class="prof-register-box">
+      <h3 style="margin:0 0 6px;">Cadastrar Professor</h3>
+      <div class="mu" style="margin-bottom:10px; font-size:12px;">Informe o <b>Nome Completo</b> do docente. Depois clique sobre o nome na lista abaixo para gerenciar apelidos e disciplinas.</div>
+      <datalist id="profsAulasSugList">${nomesSugestaoCadastro.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <datalist id="listaDisciplinasProf">${disciplinasList.map(d => `<option value="${esc(d)}">`).join('')}</datalist>
+      <form data-form="prof_novo" class="prof-ficha-form form-grid-compact">
+        <div class="field-group span-2-desktop">
+          <label class="field-label" for="inpNovoProfNome">Nome Completo *</label>
+          <input id="inpNovoProfNome" name="nome" list="profsAulasSugList" placeholder="Ex.: Carlos Eduardo Silva" required autocomplete="off">
         </div>
         <div class="field-group">
-          <label class="field-label">Disciplina / Área</label>
-          <div class="preset-field-wrap">
-            <select name="disciplina" aria-label="Disciplina ou área de atuação">
-              ${optHtml(disciplinasList, '', 'Disciplina / Área...')}
-            </select>
-            ${gear('disciplinas', 'Gerenciar Disciplinas / Áreas')}
-          </div>
-        </div>
-        <div class="field-group">
-          <label class="field-label">Turno</label>
-          <div class="preset-field-wrap">
-            <select name="turno" aria-label="Turno">
-              ${optHtml(turnosList, '', 'Turno...')}
-            </select>
-            ${gear('turnos', 'Gerenciar Turnos')}
-          </div>
-        </div>
-        <div class="field-group">
-          <label class="field-label">Sala / Turma padrão</label>
-          <div class="preset-field-wrap">
-            <select name="sala" aria-label="Sala ou turma padrão">
-              ${optHtml(salasList, '', 'Sala / Turma...')}
-            </select>
-            ${gear('salas', 'Gerenciar Salas / Turmas')}
-          </div>
+          <label class="field-label" for="inpNovoProfDisc">Disciplina inicial (opcional)</label>
+          <input id="inpNovoProfDisc" name="disciplina" list="listaDisciplinasProf" placeholder="Selecionar ou digitar..." autocomplete="off">
         </div>
         <div class="form-actions-cell">
-          <button class="b p" style="white-space:nowrap;"><span class="ui-glyph" aria-hidden="true">✓</span> Salvar Ficha</button>
+          <button type="submit" class="b p" style="white-space:nowrap;">+ Cadastrar</button>
         </div>
       </form>
-      <div style="margin-top:10px;">
-        ${perfisOrd.map(([key, p]) => `
-          <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
-            <div class="t" style="min-width:160px; flex:1.2 1 160px;">
-              <b>${esc(p.nome)}</b>
-            </div>
-            <select class="obs" style="margin:0; flex:1.3 1 150px;" data-act="prof_perfil_upd" data-key="${esc(key)}" data-f="disciplina" title="Disciplina / Área de Atuação">
-              ${optHtml(disciplinasList, p.disciplina || '', 'Disciplina / Área...')}
-            </select>
-            <select class="obs" style="margin:0; flex:1 1 115px;" data-act="prof_perfil_upd" data-key="${esc(key)}" data-f="turno" title="Turno">
-              ${optHtml(turnosList, p.turno || '', 'Turno...')}
-            </select>
-            <select class="obs" style="margin:0; flex:1.1 1 130px;" data-act="prof_perfil_upd" data-key="${esc(key)}" data-f="sala" title="Sala / Turma padrão">
-              ${optHtml(salasList, p.sala || '', 'Sala / Turma...')}
-            </select>
-            <button type="button" class="b danger" data-act="del_prof_perfil" data-key="${esc(key)}" style="font-size:11px; padding:3px 8px;" title="Remover ficha">✕</button>
-          </div>
-        `).join('') || '<div class="empty" style="padding:10px 0;">Nenhuma ficha de professor cadastrada ainda.</div>'}
-      </div>
     </div>
   `;
 
-  h += `<div class="mu" style="margin-bottom:8px">Una os nomes diferentes de um mesmo professor (ex.: “Hugo” e “Hugo Lemos”) para que entrem num só contrato e num só recibo por dia.</div>`;
-
+  let blocoSugestoes = '';
   if (sug.length) {
-    h += `<h3>Sugestões (${sug.length})</h3>` +
-      sug.map(s => `<div class="row"><div class="t"><b class="sug-pair">${esc(s.alt)} <span class="sug-arrow">${icoSeta('arrow-right', 14)}</span> ${esc(s.nome)}</b></div><button class="b p" data-act="ap_unir" data-alt="${esc(s.alt)}" data-nome="${esc(s.nome)}">Unir</button></div>`).join('') +
-      (sug.length > 1 ? `<div class="fx" style="margin-top:8px"><button class="b" data-act="ap_todas">Unir todas as sugestões</button></div>` : '');
+    blocoSugestoes = `
+      <div class="prof-sug-box">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+          <h3 style="margin:0;">Sugestões automáticas de apelido (${sug.length})</h3>
+          ${sug.length > 1 ? `<button type="button" class="b" data-act="ap_todas" style="font-size:11.5px; padding:4px 10px;">Unir todas</button>` : ''}
+        </div>
+        ${sug.map(s => `
+          <div class="row" style="padding:7px 6px;">
+            <div class="t"><b class="sug-pair">${esc(s.alt)} <span class="sug-arrow">${icoSeta('arrow-right', 14)}</span> ${esc(s.nome)}</b></div>
+            <button type="button" class="b p" data-act="ap_unir" data-alt="${esc(s.alt)}" data-nome="${esc(s.nome)}" style="font-size:12px; padding:4px 10px;">Vincular</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
   }
 
-  h += `
-    <h3>Unir manualmente</h3>
-    <datalist id="profsL">${optionsDatalist}</datalist>
-    <form data-form="apelido" id="formApelido" class="form-grid-compact">
-      <div class="field-group">
-        <label class="field-label" for="inpApNome">Nome oficial</label>
-        <input name="nome" id="inpApNome" list="profsL" placeholder="Nome que vale (oficial)" required autocomplete="off">
-      </div>
-      <div class="field-group span-2-desktop">
-        <label class="field-label" for="inpApAlts">Outros nomes / variações</label>
-        <input name="alts" id="inpApAlts" placeholder="Outros nomes, separados por vírgula" required autocomplete="off">
-      </div>
-      <div class="form-actions-cell">
-        <button class="b p">Unir</button>
-      </div>
-    </form>
-    <div id="avisoApelidoForm" class="ap-form-aviso" style="display:none;"></div>
-  `;
+  const listaCardsHtml = profsFiltrados.length
+    ? profsFiltrados.map(p => {
+        const isOpen = typeof profsExpandidos !== 'undefined' && profsExpandidos && profsExpandidos.has(p.id);
+        const metaTxt = formatarMetaProfessor(p);
+        const aliases = Array.isArray(p.aliases) ? p.aliases : [];
+        const subjects = Array.isArray(p.subjects) ? p.subjects : [];
 
-  if (apOrd.length) {
-    h += `<h3>Nomes unidos (${apOrd.length})</h3>` + apOrd.map(e => {
-      const altsOrd = [...(e.alts || [])].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
-      return `<div class="row"><div class="t"><b>${esc(e.nome)}</b><span class="mu">também aparece como: ${altsOrd.map(esc).join(', ')}</span></div><button class="b" data-act="del_apelido" data-id="${e.id}">Desfazer</button></div>`;
-    }).join('');
-  }
+        return `
+          <div class="prof-card ${isOpen ? 'is-expanded' : ''}" data-prof-id="${esc(p.id)}">
+            <div class="prof-card-head">
+              <button type="button" class="prof-card-trigger" data-act="toggle_prof_card" data-id="${esc(p.id)}" aria-expanded="${isOpen ? 'true' : 'false'}">
+                <span class="ui-glyph prof-card-chevron" aria-hidden="true">▸</span>
+                <span class="prof-card-title-wrap">
+                  <span class="prof-card-name">${esc(p.name)}</span>
+                  ${metaTxt ? `<span class="prof-card-meta">${esc(metaTxt)}</span>` : ''}
+                </span>
+              </button>
+              <button type="button" class="prof-card-del" data-act="del_professor" data-id="${esc(p.id)}" title="Remover cadastro do professor" aria-label="Remover ${esc(p.name)}">✕</button>
+            </div>
+            <div class="prof-card-accordion">
+              <div class="prof-card-accordion-inner">
+                <div class="prof-card-body">
+                  <div class="prof-detail-grid">
+                    <div class="prof-detail-block">
+                      <div class="prof-detail-label">Apelidos (Nomes Secundários)</div>
+                      <div class="prof-pills-list">
+                        ${aliases.length
+                          ? aliases.map(al => `
+                              <span class="prof-pill">
+                                <span>${esc(al)}</span>
+                                <button type="button" class="prof-pill-del" data-act="prof_del_alias" data-id="${esc(p.id)}" data-val="${esc(al)}" title="Remover apelido" aria-label="Remover apelido ${esc(al)}">✕</button>
+                              </span>
+                            `).join('')
+                          : '<span class="prof-pills-empty">Nenhum apelido cadastrado</span>'
+                        }
+                      </div>
+                      <form class="prof-inline-form" data-form="prof_add_alias" data-id="${esc(p.id)}">
+                        <input type="text" name="alias" id="inpProfAlias_${esc(p.id)}" class="prof-inline-input" placeholder="Adicionar apelido..." autocomplete="off">
+                        <button type="submit" class="b p prof-inline-add-btn" title="Adicionar apelido" aria-label="Adicionar apelido">+</button>
+                      </form>
+                    </div>
+
+                    <div class="prof-detail-block">
+                      <div class="prof-detail-label">Disciplinas do Professor</div>
+                      <div class="prof-pills-list">
+                        ${subjects.length
+                          ? subjects.map(sub => `
+                              <span class="prof-pill is-subject">
+                                <span>${esc(sub)}</span>
+                                <button type="button" class="prof-pill-del" data-act="prof_del_subject" data-id="${esc(p.id)}" data-val="${esc(sub)}" title="Remover disciplina" aria-label="Remover disciplina ${esc(sub)}">✕</button>
+                              </span>
+                            `).join('')
+                          : '<span class="prof-pills-empty">Nenhuma disciplina vinculada</span>'
+                        }
+                      </div>
+                      <form class="prof-inline-form" data-form="prof_add_subject" data-id="${esc(p.id)}">
+                        <input type="text" name="subject" id="inpProfSubject_${esc(p.id)}" class="prof-inline-input" list="listaDisciplinasProf" placeholder="Selecionar ou digitar disciplina..." autocomplete="off">
+                        <button type="submit" class="b p prof-inline-add-btn" title="Adicionar disciplina" aria-label="Adicionar disciplina">+</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')
+    : `<div class="empty" style="padding:14px 0;">${termosFiltro.length ? 'Nenhum professor encontrado para este filtro (nome, apelido ou disciplina).' : 'Nenhum professor cadastrado ainda. Adicione o primeiro acima.'}</div>`;
 
   const badgeSug = sug.length
-    ? `<span class="pill w" title="${sug.length} sugestão(ões) encontrada(s)">${sug.length} sugest${sug.length > 1 ? 'ões' : 'ão'}</span>`
+    ? `<span class="pill w" title="${sug.length} sugestão(ões) de apelido encontrada(s)">${sug.length} sugest${sug.length > 1 ? 'ões' : 'ão'}</span>`
     : '';
 
   return `
     <div class="settings-professores-section">
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <h2 style="margin:0;">Gestão de Professores (Fichas & Apelidos)</h2>
-          <span class="pill ${perfisOrd.length > 0 ? 'o' : ''}">${perfisOrd.length} ficha(s)</span>
-          <span class="pill ${apOrd.length > 0 ? 'o' : ''}">${apOrd.length} unido(s)</span>
+          <h2 style="margin:0;">Gestão de Professores</h2>
+          <span class="pill ${profsOrd.length > 0 ? 'o' : ''}">${profsOrd.length} ${profsOrd.length === 1 ? 'professor' : 'professores'}</span>
           ${badgeSug}
         </div>
       </div>
-      ${h}
+
+      ${blocoProfPresets}
+      ${blocoNovoProfessor}
+      ${blocoSugestoes}
+
+      <div class="prof-list-section">
+        <div class="prof-list-toolbar">
+          <div>
+            <h3 style="margin:0;">Professores Cadastrados (${profsFiltrados.length}${termosFiltro.length ? ` de ${profsOrd.length}` : ''})</h3>
+            <div class="mu" style="font-size:12px;">Clique no nome do professor para expandir e editar apelidos e disciplinas.</div>
+          </div>
+          <div class="prof-list-search-wrap">
+            <span class="ui-glyph prof-list-search-ico" aria-hidden="true">⌕</span>
+            <input id="filtroGestaoProfs" type="text" class="prof-list-search-input" value="${esc(filtroRaw)}" placeholder="Filtrar por nome, apelido ou disciplina..." autocomplete="off">
+          </div>
+        </div>
+        <div class="prof-cards-list">
+          ${listaCardsHtml}
+        </div>
+      </div>
     </div>
   `;
 }
 
 // --- RENDERIZADOR DA ABA OPERAÇÕES ---
 
-async function baixarPlanilhaResumo(tipo) {
+async function baixarPlanilhaResumo(tipo, iniOpt = '', fimOpt = '') {
   const agora = new Date();
-  const ehDia = tipo === 'dia';
-  const nSem = ehDia ? 0 : (parseInt(tipo, 10) || 1);
-  const nDias = ehDia ? 0 : nSem * 7;
-  const dataFim = ehDia ? hoje : addD(hoje, nDias);
+  const resumo = coletarDadosResumoPeriodo(tipo, iniOpt, fimOpt);
+  const { dataIni, dataFim, iniBR, fimBR, dias } = resumo.intervalo;
+  const ehDia = dataIni === dataFim;
   const rotuloPeriodo = ehDia
-    ? 'RESUMO DO DIA'
-    : (nSem === 4 ? 'DO MÊS (4 SEMANAS)' : `DE ${nSem} SEMANA${nSem > 1 ? 'S' : ''}`);
-  const rotuloDias = ehDia ? 'Hoje' : `${nDias} dias`;
-  const slugPeriodo = ehDia ? 'dia' : `${nSem}-semanas`;
+    ? `DIA ${iniBR}`
+    : `${iniBR} A ${fimBR}`;
+  const rotuloDias = dias === 1 ? '1 dia' : `${dias} dias`;
+  const slugPeriodo = `${dataIni}-a-${dataFim}`;
   const geradoEm = `${agora.toLocaleDateString('pt-BR')} às ${pad(agora.getHours())}:${pad(agora.getMinutes())}`;
 
-  const aulasPeriodo = S.aulas.filter(a => a.dia >= hoje && a.dia <= dataFim);
+  const aulasPeriodo = S.aulas.filter(a => a.dia >= dataIni && a.dia <= dataFim);
   aulasPeriodo.sort((a, b) => (a.dia + (a.hora || '')).localeCompare(b.dia + (b.hora || '')));
 
   const repPend = S.reparos.filter(r => r.status !== 'Concluído');
   const orcAguardando = (S.orc.itens || []).filter(i => i.status === 'Aguardando aprovação');
-  const G_periodo = groups(hoje, dataFim);
+  const G_periodo = groups(dataIni, dataFim);
 
   if (typeof window.ExcelJS === 'undefined') {
-    let csv = `\uFEFFARGOS OPS — DETALHAMENTO DE AULAS - ${rotuloPeriodo}\n\n`;
-    csv += 'Data;Dia da Semana;Horário;Turma;Professor;Disciplina;Confirmação de Aula;Material (Slides)\n';
+    let csv = `\uFEFFARGOS OPS — RESUMO POR PERÍODO (${rotuloPeriodo})\n`;
+    csv += `${resumo.headerResumo}\n\n`;
+    csv += `✓ REALIZADO NO PERÍODO (${resumo.totalConcluidos})\nData;Categoria;Item / Professor;Detalhes;Status\n`;
+    if (resumo.concluidos.length) {
+      resumo.concluidos.forEach(it => {
+        csv += `"${brFull(it.dia)}";"${it.categoria}";"${(it.titulo || '').replace(/"/g, '""')}";"${(it.detalhes || '').replace(/"/g, '""')}";"${(it.status || '').replace(/"/g, '""')}"\n`;
+      });
+    } else {
+      csv += '"";"";"Nenhum item concluído neste período.";"";""\n';
+    }
+    csv += `\n◷ PLANEJADO / PENDENTE NO PERÍODO (${resumo.totalPlanejados})\nData;Categoria;Item / Professor;Detalhes;Status\n`;
+    if (resumo.planejados.length) {
+      resumo.planejados.forEach(it => {
+        csv += `"${brFull(it.dia)}";"${it.categoria}";"${(it.titulo || '').replace(/"/g, '""')}";"${(it.detalhes || '').replace(/"/g, '""')}";"${(it.status || '').replace(/"/g, '""')}"\n`;
+      });
+    } else {
+      csv += '"";"";"Nenhum item planejado ou pendente neste período.";"";""\n';
+    }
+    csv += `\nDETALHAMENTO DE AULAS\nData;Dia da Semana;Horário;Turma;Professor;Disciplina;Confirmação de Aula;Material (Slides)\n`;
     aulasPeriodo.forEach(a => {
-      csv += `"${br(a.dia)}";"${wd(a.dia)}";"${a.hora || ''}";"${(a.turma || '').replace(/"/g, '""')}";"${(a.prof || '').replace(/"/g, '""')}";"${(a.desc || '').replace(/"/g, '""')}";"${a.confirmada ? 'Confirmada' : 'Pendente'}";"${a.materialPronto ? 'Pronto' : 'Pendente'}"\n`;
+      csv += `"${brFull(a.dia)}";"${wd(a.dia)}";"${a.hora || ''}";"${(a.turma || '').replace(/"/g, '""')}";"${(a.prof || '').replace(/"/g, '""')}";"${(a.desc || '').replace(/"/g, '""')}";"${a.confirmada ? 'Confirmada' : 'Pendente'}";"${a.materialPronto ? 'Pronto' : 'Pendente'}"\n`;
     });
     if (repPend.length > 0) {
       csv += '\n\nMANUTENÇÕES E REPAROS PENDENTES\n\nData Registro;Item;Local;Status;Observações\n';
       repPend.forEach(r => {
-        csv += `"${br(r.dataReg || hoje)}";"${(r.item || '').replace(/"/g, '""')}";"${(r.local || '').replace(/"/g, '""')}";"${(r.status || '').replace(/"/g, '""')}";"${(r.obs || '').replace(/"/g, '""')}"\n`;
+        csv += `"${brFull(r.dataReg || hoje)}";"${(r.item || '').replace(/"/g, '""')}";"${(r.local || '').replace(/"/g, '""')}";"${(r.status || '').replace(/"/g, '""')}";"${(r.obs || '').replace(/"/g, '""')}"\n`;
       });
     }
     if (orcAguardando.length > 0) {
@@ -644,6 +1007,73 @@ async function baixarPlanilhaResumo(tipo) {
     };
 
     // ========================================================
+    // ABA 0: RESUMO POR PERÍODO (REALIZADO VS PLANEJADO)
+    // ========================================================
+    const wsResumo = wb.addWorksheet('Resumo do Período', {
+      views: [{ state: 'frozen', ySplit: 4, showGridLines: false }],
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    });
+
+    aplicarBanner(
+      wsResumo,
+      5,
+      `ARGOS OPS  •  RESUMO POR PERÍODO (${rotuloPeriodo})`,
+      `${resumo.headerResumo}   |   Exportado em: ${geradoEm}`
+    );
+
+    estilizarHeader(
+      wsResumo,
+      4,
+      ['Classificação', 'Data', 'Categoria', 'Item / Professor / Turma', 'Status / Etapa'],
+      [1, 2, 3],
+      []
+    );
+
+    const linhasResumo = [
+      ...resumo.concluidos.map(it => ({ grupo: '✓ REALIZADO', ok: true, it })),
+      ...resumo.planejados.map(it => ({ grupo: '◷ PLANEJADO / PENDENTE', ok: false, it }))
+    ];
+    const wResumo = [24, 14, 18, 42, 36];
+    if (linhasResumo.length > 0) {
+      wsResumo.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + linhasResumo.length, column: 5 } };
+      linhasResumo.forEach((entry, idx) => {
+        const rIdx = 5 + idx;
+        const row = wsResumo.getRow(rIdx);
+        row.height = 23;
+        const bg = idx % 2 === 1 ? C_ZEBRA : C_WHITE;
+        const descCompleta = entry.it.detalhes ? `${entry.it.titulo} (${entry.it.detalhes})` : entry.it.titulo;
+        row.getCell(1).value = entry.grupo;
+        row.getCell(2).value = brFull(entry.it.dia);
+        row.getCell(3).value = entry.it.categoria;
+        row.getCell(4).value = descCompleta;
+        row.getCell(5).value = entry.it.status;
+        wResumo[3] = Math.max(wResumo[3], Math.min(58, descCompleta.length + 4));
+        wResumo[4] = Math.max(wResumo[4], Math.min(48, (entry.it.status || '').length + 4));
+
+        for (let c = 1; c <= 5; c++) {
+          const cell = row.getCell(c);
+          cell.border = borderThin;
+          cell.alignment = { vertical: 'middle', horizontal: [1, 2, 3].includes(c) ? 'center' : 'left', wrapText: c >= 4 };
+          if (c === 1) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: entry.ok ? C_EMERALD_PILL : C_AMBER_PILL } };
+            cell.font = { name: FONT_NAME, size: 9.5, bold: true, color: { argb: entry.ok ? C_EMERALD_TX : C_AMBER_TX } };
+          } else {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.font = { name: FONT_NAME, size: 10, bold: c === 4, color: { argb: c === 5 ? C_MUTED : C_TEXT } };
+          }
+        }
+      });
+    } else {
+      wsResumo.mergeCells('A5:E5');
+      const emptyRes = wsResumo.getCell('A5');
+      emptyRes.value = 'Nenhum registro encontrado neste período.';
+      emptyRes.font = { name: FONT_NAME, size: 11, italic: true, color: { argb: C_MUTED } };
+      emptyRes.alignment = { vertical: 'middle', horizontal: 'center' };
+      wsResumo.getRow(5).height = 28;
+    }
+    wResumo.forEach((w, i) => { wsResumo.getColumn(i + 1).width = w; });
+
+    // ========================================================
     // ABA 1: PLANEJAMENTO DE AULAS
     // ========================================================
     const wsAulas = wb.addWorksheet('Planejamento de Aulas', {
@@ -662,7 +1092,7 @@ async function baixarPlanilhaResumo(tipo) {
       wsAulas,
       9,
       `ARGOS OPS  •  PLANEJAMENTO DE AULAS (${rotuloPeriodo})`,
-      `Período: ${br(hoje)} a ${br(dataFim)} (${rotuloDias})   |   Manutenções Abertas: ${repPend.length}   |   Exportado em: ${geradoEm}`
+      `Período: ${iniBR} a ${fimBR} (${rotuloDias})   |   Manutenções Abertas: ${repPend.length}   |   Exportado em: ${geradoEm}`
     );
 
     const firstAulaRow = 8;
@@ -831,7 +1261,7 @@ async function baixarPlanilhaResumo(tipo) {
         wsDocs,
         7,
         'ARGOS OPS  •  CONTROLE DE RECIBOS E CONTRATOS',
-        `Período: ${br(hoje)} a ${br(dataFim)}   |   Grupos Professor/Dia: ${G_periodo.length}   |   Pendentes: ${pendCount}`
+        `Período: ${iniBR} a ${fimBR}   |   Grupos Professor/Dia: ${G_periodo.length}   |   Pendentes: ${pendCount}`
       );
 
       estilizarHeader(
@@ -1165,26 +1595,101 @@ function viewOperacional() {
   }
 
   if (subTabSemana === 'resumos') {
-    const textoPadrao = typeof gerarResumoOperacional === 'function' ? gerarResumoOperacional(resumoTipoAtual || 'dia') : '';
+    const tipoAtual = typeof resumoTipoAtual === 'string' ? resumoTipoAtual : 'dia';
+    const iniSalva = typeof resumoDataIni === 'string' ? resumoDataIni : hoje;
+    const fimSalva = typeof resumoDataFim === 'string' ? resumoDataFim : iniSalva;
+    const resumo = coletarDadosResumoPeriodo(tipoAtual, iniSalva, fimSalva);
+    const { dataIni, dataFim, iniBR, fimBR } = resumo.intervalo;
+    const textoPadrao = gerarResumoOperacional(tipoAtual, dataIni, dataFim);
     const textoAtual = (typeof resumoTextoCustomizado === 'string') ? resumoTextoCustomizado : textoPadrao;
+
+    const renderResumoItemRow = (item, isDone) => {
+      const dataItem = typeof brFull === 'function' ? brFull(item.dia) : br(item.dia);
+      return `
+        <div class="resumo-item-row ${isDone ? 'is-done' : 'is-pending'}">
+          <div class="resumo-item-top">
+            <span class="resumo-item-date">${esc(dataItem)}</span>
+            <span class="resumo-item-sep" aria-hidden="true">·</span>
+            <span class="resumo-item-cat">${esc(item.categoria)}</span>
+            <span class="resumo-item-sep" aria-hidden="true">·</span>
+            <span class="resumo-item-title">${esc(item.titulo)}</span>
+          </div>
+          ${item.detalhes ? `<div class="resumo-item-sub">${esc(item.detalhes)}</div>` : ''}
+          <div class="resumo-item-status ${isDone ? 'is-done' : 'is-pending'}">
+            <span class="ui-glyph" aria-hidden="true">${isDone ? '✓' : '◷'}</span>
+            <span>${esc(item.status)}</span>
+          </div>
+        </div>
+      `;
+    };
 
     let cardResumos = `
       <div class="card">
-        <h2>Central de Resumos e Relatórios</h2>
-        <div class="mu" style="margin-bottom:14px;">Gere relatórios compilados prontos para envio no WhatsApp da equipe e coordenação:</div>
-        <div class="fx" style="gap:8px; margin-bottom:14px;">
-          <button class="b ${resumoTipoAtual === 'dia' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="dia" title="Carregar e copiar briefing de hoje"><span class="ui-glyph" aria-hidden="true">☀\uFE0E</span> Resumo de Hoje</button>
-          <button class="b ${resumoTipoAtual === '1' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="1" title="Carregar e copiar compilado de 1 semana (7 dias)">1 Semana (7 dias)</button>
-          <button class="b ${resumoTipoAtual === '2' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="2" title="Carregar e copiar compilado de 2 semanas (14 dias)">2 Semanas (14 dias)</button>
-          <button class="b ${resumoTipoAtual === '3' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="3" title="Carregar e copiar compilado de 3 semanas (21 dias)">3 Semanas (21 dias)</button>
-          <button class="b ${resumoTipoAtual === '4' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="4" style="${resumoTipoAtual !== '4' ? 'border-color:var(--ac); color:var(--ac); font-weight:600;' : ''}" title="Carregar e copiar compilado do mês (28 dias)">Mês (4 Semanas)</button>
+        <h2>Central de Resumos por Período</h2>
+        <div class="mu" style="margin-bottom:12px;">Selecione um atalho rápido ou informe o intervalo de datas para separar o que já foi concluído do que segue planejado ou pendente:</div>
+
+        <div class="resumo-controls-bar">
+          <div class="fx resumo-presets-row" style="gap:6px; margin-bottom:0;">
+            <button type="button" class="b ${tipoAtual === 'dia' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="dia" title="Carregar e copiar briefing de hoje"><span class="ui-glyph" aria-hidden="true">☀\uFE0E</span> Hoje</button>
+            <button type="button" class="b ${tipoAtual === '1' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="1" title="Carregar e copiar compilado de 1 semana (7 dias)">1 Semana</button>
+            <button type="button" class="b ${tipoAtual === '2' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="2" title="Carregar e copiar compilado de 2 semanas (14 dias)">2 Semanas</button>
+            <button type="button" class="b ${tipoAtual === '3' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="3" title="Carregar e copiar compilado de 3 semanas (21 dias)">3 Semanas</button>
+            <button type="button" class="b ${tipoAtual === '4' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="4" title="Carregar e copiar compilado do mês (4 semanas)">Mês (4 Sem.)</button>
+          </div>
+          <div class="resumo-date-range">
+            <label class="resumo-date-field" for="resumoDataIni">
+              <span>De</span>
+              <input type="date" id="resumoDataIni" value="${esc(dataIni)}">
+            </label>
+            <label class="resumo-date-field" for="resumoDataFim">
+              <span>Até</span>
+              <input type="date" id="resumoDataFim" value="${esc(dataFim)}">
+            </label>
+          </div>
         </div>
-        <div class="mu" style="font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-          <span><span class="ui-glyph" aria-hidden="true">✎</span> <b>Área editável</b> (clique no texto abaixo para alterar livremente ou nos botões acima para alternar períodos):</span>
+
+        <div class="resumo-kpi-strip" role="status" aria-live="polite">
+          <span><b>Período:</b> ${esc(iniBR)} a ${esc(fimBR)}</span>
+          <span class="resumo-kpi-sep" aria-hidden="true">|</span>
+          <span class="resumo-kpi-done"><span class="ui-glyph" aria-hidden="true">✓</span> Concluídos: <b>${resumo.totalConcluidos}</b></span>
+          <span class="resumo-kpi-sep" aria-hidden="true">|</span>
+          <span class="resumo-kpi-pending"><span class="ui-glyph" aria-hidden="true">◷</span> Planejados/Pendentes: <b>${resumo.totalPlanejados}</b></span>
+          <span class="resumo-kpi-sep" aria-hidden="true">|</span>
+          <span>Total: <b>${resumo.totalGeral}</b></span>
+        </div>
+
+        <div class="resumo-split-grid">
+          <section class="resumo-section-block is-done" aria-label="Realizado no período">
+            <div class="resumo-section-head">
+              <span class="ui-glyph resumo-section-ico is-done" aria-hidden="true">✓</span>
+              <h3>REALIZADO NO PERÍODO (${resumo.totalConcluidos})</h3>
+            </div>
+            <div class="resumo-section-list">
+              ${resumo.concluidos.length
+                ? resumo.concluidos.map(it => renderResumoItemRow(it, true)).join('')
+                : '<div class="empty resumo-empty">Nenhum item concluído neste período.</div>'}
+            </div>
+          </section>
+
+          <section class="resumo-section-block is-pending" aria-label="Planejado ou pendente no período">
+            <div class="resumo-section-head">
+              <span class="ui-glyph resumo-section-ico is-pending" aria-hidden="true">◷</span>
+              <h3>PLANEJADO / PENDENTE NO PERÍODO (${resumo.totalPlanejados})</h3>
+            </div>
+            <div class="resumo-section-list">
+              ${resumo.planejados.length
+                ? resumo.planejados.map(it => renderResumoItemRow(it, false)).join('')
+                : '<div class="empty resumo-empty">Nenhum item planejado ou pendente neste período.</div>'}
+            </div>
+          </section>
+        </div>
+
+        <div class="resumo-editor-toolbar">
+          <span class="mu" style="font-size:12px;"><span class="ui-glyph" aria-hidden="true">✎</span> <b>Texto para WhatsApp</b> (editável antes de copiar):</span>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="b" data-act="baixar_planilha_resumo" style="font-size:11.5px; padding:3px 9px;" title="Gerar planilha Excel (.xlsx) formatada do período selecionado"><span class="ui-glyph" aria-hidden="true">⇩</span> Exportar Planilha (.xlsx)</button>
-            <button class="b" data-act="copiar_resumo_editado" style="font-size:11.5px; padding:3px 9px;" title="Copiar exatamente o que foi editado abaixo"><span class="ui-glyph" aria-hidden="true">≡</span> Copiar texto editado</button>
-            <button class="b" data-act="restaurar_resumo_original" style="font-size:11.5px; padding:3px 9px;" title="Recarregar o modelo padrão"><span class="ui-glyph" aria-hidden="true">↻</span> Restaurar original</button>
+            <button type="button" class="b p" data-act="copiar_resumo_editado" style="font-size:12px; padding:5px 12px;" title="Copiar resumo formatado para envio no WhatsApp"><span class="ui-glyph" aria-hidden="true">≡</span> Copiar Resumo (WhatsApp)</button>
+            <button type="button" class="b" data-act="baixar_planilha_resumo" style="font-size:12px; padding:5px 11px;" title="Gerar planilha Excel (.xlsx) formatada do período selecionado"><span class="ui-glyph" aria-hidden="true">⇩</span> Exportar Planilha (.xlsx)</button>
+            <button type="button" class="b" data-act="restaurar_resumo_original" style="font-size:12px; padding:5px 10px;" title="Recarregar o modelo padrão"><span class="ui-glyph" aria-hidden="true">↻</span> Restaurar original</button>
           </div>
         </div>
         <div id="campoResumoEditavel" 
@@ -1193,7 +1698,7 @@ function viewOperacional() {
              role="textbox" 
              aria-multiline="true" 
              data-placeholder="Digite ou edite o resumo operacional aqui..." 
-             style="background:var(--bg); border:1.5px solid var(--bd); border-radius:8px; padding:12px; font-family:monospace; font-size:12.5px; white-space:pre-wrap; line-height:1.5; color:var(--tx); min-height:220px; max-height:420px; overflow-y:auto; cursor:text; outline:none; transition:border-color 0.15s ease, box-shadow 0.15s ease;">${esc(textoAtual)}</div>
+             style="background:var(--bg); border:1.5px solid var(--bd); border-radius:8px; padding:12px; font-family:monospace; font-size:12.5px; white-space:pre-wrap; line-height:1.5; color:var(--tx); min-height:200px; max-height:380px; overflow-y:auto; cursor:text; outline:none; transition:border-color 0.15s ease, box-shadow 0.15s ease;">${esc(textoAtual)}</div>
       </div>
     `;
     return subNav + cardResumos;
@@ -1254,7 +1759,8 @@ function viewOperacional() {
   const G = groups(a, b).filter(g => {
     if (!termosBuscaDocs.length) return true;
     const aulasCorpus = g.aulas.map(au => `${au.turma} ${au.hora} ${au.desc}`).join(' ');
-    return matchBusca(`${g.prof} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBuscaDocs);
+    const profCorpus = typeof expandirCorpusProfessor === 'function' ? expandirCorpusProfessor(g.prof) : (g.prof || '');
+    return matchBusca(`${profCorpus} ${br(g.dia)} ${wd(g.dia)} ${aulasCorpus}`, termosBuscaDocs);
   });
   let body = '', last = '';
   G.forEach(g => { 

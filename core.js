@@ -307,9 +307,178 @@ function sanitizeOptionalLink(raw) {
   return s;
 }
 
+function _normTxtCore(s) {
+  return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function _uidCore() {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+function _cleanProfList(raw, excludeNorm = '') {
+  const arr = Array.isArray(raw)
+    ? raw
+    : (typeof raw === 'string' && raw.trim() ? [raw] : []);
+  const vistos = new Set();
+  const out = [];
+  arr.forEach(v => {
+    const limpo = String(v ?? '').trim();
+    const n = _normTxtCore(limpo);
+    if (!limpo || !n || (excludeNorm && n === excludeNorm) || vistos.has(n)) return;
+    vistos.add(n);
+    out.push(limpo);
+  });
+  return out;
+}
+
+function normalizarProfessores(rawProfs, rawApelidos, rawPerfis, mesclarLegado = false) {
+  const porNome = new Map();
+  const lista = [];
+
+  const obterOuCriar = (nomeRaw, idPreferido = '') => {
+    const name = String(nomeRaw ?? '').trim();
+    const nk = _normTxtCore(name);
+    if (!name || !nk) return null;
+    if (porNome.has(nk)) return porNome.get(nk);
+    const id = (typeof idPreferido === 'string' && idPreferido.trim()) ? idPreferido.trim() : ('prof_' + _uidCore());
+    const prof = { id, name, aliases: [], subjects: [], turno: '', sala: '' };
+    porNome.set(nk, prof);
+    lista.push(prof);
+    return prof;
+  };
+
+  const encontrarPorNomeOuApelido = nomeRaw => {
+    const nk = _normTxtCore(nomeRaw);
+    if (!nk) return null;
+    if (porNome.has(nk)) return porNome.get(nk);
+    for (const p of lista) {
+      if (p.aliases.some(a => _normTxtCore(a) === nk)) return p;
+    }
+    return null;
+  };
+
+  const mesclarEm = (prof, aliasesRaw, subjectsRaw, turnoRaw, salaRaw) => {
+    if (!prof) return;
+    const nkNome = _normTxtCore(prof.name);
+    const alts = _cleanProfList(aliasesRaw, nkNome);
+    alts.forEach(a => {
+      if (!prof.aliases.some(x => _normTxtCore(x) === _normTxtCore(a))) {
+        prof.aliases.push(a);
+      }
+    });
+    const subjs = _cleanProfList(subjectsRaw);
+    subjs.forEach(s => {
+      if (!prof.subjects.some(x => _normTxtCore(x) === _normTxtCore(s))) {
+        prof.subjects.push(s);
+      }
+    });
+    const turno = String(turnoRaw ?? '').trim();
+    const sala = String(salaRaw ?? '').trim();
+    if (turno && !prof.turno) prof.turno = turno;
+    if (sala && !prof.sala) prof.sala = sala;
+  };
+
+  if (Array.isArray(rawProfs)) {
+    rawProfs.forEach(item => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+      const clean = safePlainObj(item);
+      const nameRaw = clean.name !== undefined ? clean.name : clean.nome;
+      const prof = obterOuCriar(nameRaw, clean.id);
+      if (!prof) return;
+      const aliasesSrc = clean.aliases !== undefined
+        ? (typeof clean.aliases === 'string' ? clean.aliases.split(',') : clean.aliases)
+        : (clean.alts !== undefined ? clean.alts : []);
+      const subjectsSrc = [
+        ..._cleanProfList(clean.subjects),
+        ..._cleanProfList(clean.subject),
+        ..._cleanProfList(clean.disciplinas),
+        ..._cleanProfList(clean.disciplina)
+      ];
+      mesclarEm(prof, aliasesSrc, subjectsSrc, clean.turno, clean.sala);
+    });
+  }
+
+  if (mesclarLegado) {
+    if (Array.isArray(rawApelidos)) {
+      rawApelidos.forEach(a => {
+        if (!a || typeof a !== 'object' || Array.isArray(a)) return;
+        const clean = safePlainObj(a);
+        const prof = obterOuCriar(clean.nome || clean.name, clean.id);
+        if (!prof) return;
+        const alts = Array.isArray(clean.alts) ? clean.alts : (Array.isArray(clean.aliases) ? clean.aliases : []);
+        mesclarEm(prof, alts, [], '', '');
+      });
+    }
+
+    const perfisObj = safePlainObj(rawPerfis);
+    Object.values(perfisObj).forEach(p => {
+      if (!p || typeof p !== 'object' || Array.isArray(p)) return;
+      const clean = safePlainObj(p);
+      const nome = String(clean.nome || clean.name || '').trim();
+      if (!nome) return;
+      const prof = encontrarPorNomeOuApelido(nome) || obterOuCriar(nome, clean.id);
+      if (!prof) return;
+      const subjectsSrc = [
+        ..._cleanProfList(clean.subjects),
+        ..._cleanProfList(clean.subject),
+        ..._cleanProfList(clean.disciplinas),
+        ..._cleanProfList(clean.disciplina)
+      ];
+      mesclarEm(prof, clean.aliases || [], subjectsSrc, clean.turno, clean.sala);
+    });
+  }
+
+  // Garante unicidade global de apelidos e ordenação consistente
+  const usados = new Set(lista.map(p => _normTxtCore(p.name)));
+  lista.forEach(p => {
+    const finais = [];
+    p.aliases.forEach(a => {
+      const na = _normTxtCore(a);
+      if (!na || usados.has(na)) return;
+      usados.add(na);
+      finais.push(a);
+    });
+    p.aliases = finais.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    p.subjects = _cleanProfList(p.subjects).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  });
+
+  return lista;
+}
+
+function sincronizarLegadoProfessores(stateObj) {
+  const alvo = stateObj || (typeof S !== 'undefined' ? S : null);
+  if (!alvo || typeof alvo !== 'object') return;
+  const profs = Array.isArray(alvo.professores) ? alvo.professores : [];
+
+  alvo.apelidos = profs
+    .filter(p => p && p.name && Array.isArray(p.aliases) && p.aliases.length > 0)
+    .map(p => ({
+      id: p.id,
+      nome: p.name,
+      alts: [...p.aliases]
+    }));
+
+  const perfis = {};
+  profs.forEach(p => {
+    if (!p || !p.name) return;
+    const k = _normTxtCore(p.name);
+    if (!k || k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+    perfis[k] = {
+      id: p.id,
+      nome: p.name,
+      disciplina: (Array.isArray(p.subjects) && p.subjects[0]) ? p.subjects[0] : '',
+      subjects: Array.isArray(p.subjects) ? [...p.subjects] : [],
+      turno: p.turno || '',
+      sala: p.sala || ''
+    };
+  });
+  alvo.profPerfis = perfis;
+}
+
 // Normalização e saneamento do objeto de estado S
 function normalizarEstado(raw) {
   const obj = safePlainObj(raw);
+  const tinhaProfessoresPadrao = Array.isArray(obj.professores);
 
   ['aulas', 'reparos', 'hist', 'orcHist', 'apelidos', 'filaMateriais', 'lembretes'].forEach(k => {
     if (!Array.isArray(obj[k])) obj[k] = [];
@@ -322,6 +491,8 @@ function normalizarEstado(raw) {
   obj.cat = safePlainObj(obj.cat);
   obj.meta = safePlainObj(obj.meta);
   obj.profPerfis = safePlainObj(obj.profPerfis);
+  obj.professores = normalizarProfessores(obj.professores, obj.apelidos, obj.profPerfis, !tinhaProfessoresPadrao);
+  sincronizarLegadoProfessores(obj);
   obj.presets = safePlainObj(obj.presets);
   obj.cronogramas = safePlainObj(obj.cronogramas);
   Object.keys(obj.cronogramas).forEach(k => {
@@ -526,8 +697,12 @@ let searchFilterAberto = false;
 let notaTagSelecionada = '';
 let novaTagNotaAberta = false;
 let apelidosAberto = false;
+let profsExpandidos = new Set();
+let filtroGestaoProfs = '';
 let resumoTextoCustomizado = null;
 let resumoTipoAtual = 'dia';
+let resumoDataIni = hoje;
+let resumoDataFim = hoje;
 
 let prev = null, pend = null, wk = 0, turmaPad = '', msg = '';
 let repFiltro = 'abertos', showPast = false, buscaGlobalTermo = '', buscaGlobalTipo = 'todos', buscaGlobalExpandida = false;
@@ -642,12 +817,14 @@ async function iniciarSupabase() {
        (data.dados.reparos && data.dados.reparos.length > 0) ||
        (data.dados.orc && data.dados.orc.itens && data.dados.orc.itens.length > 0) ||
        (data.dados.lembretes && data.dados.lembretes.length > 0) ||
+       (Array.isArray(data.dados.professores) && data.dados.professores.length > 0) ||
        (Array.isArray(data.dados.snakeTop5) && data.dados.snakeTop5.length > 0) ||
        Array.isArray(data.dados.supportSheets));
 
     const localTemDados = (S.aulas && S.aulas.length > 0) ||
       (S.reparos && S.reparos.length > 0) ||
       (S.orc && S.orc.itens && S.orc.itens.length > 0) ||
+      (Array.isArray(S.professores) && S.professores.length > 0) ||
       (Array.isArray(S.snakeTop5) && S.snakeTop5.length > 0);
 
     if (nuvemTemDados) {
@@ -718,12 +895,59 @@ const save = () => {
   agendarSyncNuvem();
 };
 
+const salvarESincronizarAgora = () => {
+  save();
+  if (supabaseConfigurado() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+    clearTimeout(sbSyncTimer);
+    enviarEstadoParaNuvem();
+  }
+};
+
 // A sincronização inicial com a nuvem é disparada após o carregamento completo dos módulos em app.js
 
 // Funções utilitárias
 const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const br = d => (typeof d === 'string' && d.includes('-')) ? esc(d.split('-').reverse().slice(0, 2).join('/')) : esc(d || '');
+const brFull = d => (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d.split('-').reverse().join('/') : (typeof d === 'string' ? d : '');
+function resolverIntervaloResumo(tipo, iniOpt, fimOpt) {
+  const t = String(tipo || 'dia').trim();
+  const ehIso = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  let dataIni = ehIso(iniOpt) ? iniOpt : (ehIso(resumoDataIni) ? resumoDataIni : hoje);
+  let dataFim = ehIso(fimOpt) ? fimOpt : (ehIso(resumoDataFim) ? resumoDataFim : dataIni);
+
+  if (t === 'dia') {
+    dataIni = hoje;
+    dataFim = hoje;
+  } else if (t !== 'custom') {
+    const nSem = parseInt(t, 10);
+    if (Number.isFinite(nSem) && nSem > 0) {
+      dataIni = hoje;
+      dataFim = addD(hoje, nSem * 7);
+    }
+  }
+
+  if (dataIni > dataFim) {
+    const tmp = dataIni;
+    dataIni = dataFim;
+    dataFim = tmp;
+  }
+
+  const dtIni = new Date(dataIni + 'T00:00:00');
+  const dtFim = new Date(dataFim + 'T00:00:00');
+  const dias = (!isNaN(dtIni.getTime()) && !isNaN(dtFim.getTime()))
+    ? Math.max(1, Math.round((dtFim.getTime() - dtIni.getTime()) / 86400000) + 1)
+    : 1;
+
+  return {
+    tipo: t,
+    dataIni,
+    dataFim,
+    iniBR: brFull(dataIni),
+    fimBR: brFull(dataFim),
+    dias
+  };
+}
 const formatarDataBR = ts => {
   const dt = ts == null || ts === '' ? new Date() : new Date(ts);
   if (isNaN(dt.getTime())) return `${pad(new Date().getDate())}/${pad(new Date().getMonth() + 1)}/${new Date().getFullYear()}`;
@@ -838,8 +1062,24 @@ const wd = d => {
   const dt = new Date(d + 'T12:00');
   return isNaN(dt) ? '' : dt.toLocaleDateString('pt-BR', { weekday: 'short' });
 };
-const norm = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const norm = s => _normTxtCore(s);
 const find = (l, id) => (S[l] || []).find(x => x.id === id);
+function buscarProfessorCadastro(nomeOuApelido) {
+  const nq = _normTxtCore(nomeOuApelido);
+  if (!nq || !S || !Array.isArray(S.professores)) return null;
+  const exato = S.professores.find(p => p && _normTxtCore(p.name) === nq);
+  if (exato) return exato;
+  return S.professores.find(p => p && Array.isArray(p.aliases) && p.aliases.some(a => _normTxtCore(a) === nq)) || null;
+}
+function expandirCorpusProfessor(nomeOuApelido) {
+  const bruto = String(nomeOuApelido ?? '').trim();
+  if (!bruto) return '';
+  const prof = buscarProfessorCadastro(bruto);
+  if (prof) {
+    return [bruto, prof.name, ...(prof.aliases || []), ...(prof.subjects || [])].filter(Boolean).join(' ');
+  }
+  return bruto;
+}
 const getBuscaTermos = () => (typeof buscaGlobalTermo === 'string' && buscaGlobalTermo.trim())
   ? norm(buscaGlobalTermo).split(/\s+/).filter(Boolean)
   : [];
