@@ -1460,21 +1460,35 @@ document.addEventListener('click', async e => {
 
   if (a === 'copiar_resumo') {
     const tipo = t.dataset.tipo || 'dia';
+    const hojeAtual = typeof iso === 'function' ? iso(new Date()) : hoje;
     resumoTipoAtual = tipo;
-    if (typeof resolverIntervaloResumo === 'function') {
+    if (tipo === 'dia') {
+      resumoDataIni = hojeAtual;
+      resumoDataFim = hojeAtual;
+    } else if (typeof resolverIntervaloResumo === 'function') {
       const iv = resolverIntervaloResumo(tipo);
       resumoDataIni = iv.dataIni;
       resumoDataFim = iv.dataFim;
     }
     resumoTextoCustomizado = null;
 
+    const iniEl = document.getElementById('resumoDataIni');
+    const fimEl = document.getElementById('resumoDataFim');
+    if (iniEl) iniEl.value = resumoDataIni;
+    if (fimEl) fimEl.value = resumoDataFim;
+
     if (typeof gerarResumoOperacional === 'function') {
       const txt = gerarResumoOperacional(tipo, resumoDataIni, resumoDataFim);
       const elResumo = document.getElementById('campoResumoEditavel');
       if (elResumo) elResumo.innerText = txt;
-      copy(txt);
-      const rotulo = tipo === 'dia' ? 'do dia' : (tipo === '4' ? 'do mês' : `de ${tipo} semana(s)`);
-      toast(`Resumo ${rotulo} carregado e copiado!`);
+      if (tipo === 'dia') {
+        const dataBr = typeof brFull === 'function' ? brFull(hojeAtual) : hojeAtual;
+        toast(`Resumo atualizado para hoje (${dataBr}).`);
+      } else {
+        copy(txt);
+        const rotulo = tipo === '4' ? 'do mês' : `de ${tipo} semana(s)`;
+        toast(`Resumo ${rotulo} carregado e copiado!`);
+      }
     }
     render();
     return;

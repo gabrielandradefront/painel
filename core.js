@@ -913,17 +913,18 @@ const brFull = d => (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d
 function resolverIntervaloResumo(tipo, iniOpt, fimOpt) {
   const t = String(tipo || 'dia').trim();
   const ehIso = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-  let dataIni = ehIso(iniOpt) ? iniOpt : (ehIso(resumoDataIni) ? resumoDataIni : hoje);
+  const hojeAtual = typeof iso === 'function' ? iso(new Date()) : hoje;
+  let dataIni = ehIso(iniOpt) ? iniOpt : (ehIso(resumoDataIni) ? resumoDataIni : hojeAtual);
   let dataFim = ehIso(fimOpt) ? fimOpt : (ehIso(resumoDataFim) ? resumoDataFim : dataIni);
 
   if (t === 'dia') {
-    dataIni = hoje;
-    dataFim = hoje;
+    dataIni = hojeAtual;
+    dataFim = hojeAtual;
   } else if (t !== 'custom') {
     const nSem = parseInt(t, 10);
     if (Number.isFinite(nSem) && nSem > 0) {
-      dataIni = hoje;
-      dataFim = addD(hoje, nSem * 7);
+      dataIni = hojeAtual;
+      dataFim = addD(hojeAtual, nSem * 7);
     }
   }
 

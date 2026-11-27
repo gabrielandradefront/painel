@@ -5010,23 +5010,23 @@ body.light .prof-inline-input {
 .resumo-controls-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px 14px;
   flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
 .resumo-date-range {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px 14px;
   flex-wrap: wrap;
 }
 
 .resumo-date-field {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 12px;
   font-weight: 600;
   color: var(--mu);
@@ -5034,7 +5034,7 @@ body.light .prof-inline-input {
 
 .resumo-date-field input[type="date"] {
   height: 32px;
-  padding: 4px 8px;
+  padding: 4px 9px;
   font-size: 12.5px;
   border-radius: 7px;
   background: var(--bg);
@@ -5046,6 +5046,18 @@ body.light .prof-inline-input {
 .resumo-date-field input[type="date"]:focus {
   border-color: var(--ac);
   outline: none;
+}
+
+.resumo-btn-hoje {
+  height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1;
+  font-variant-emoji: text;
 }
 
 .resumo-kpi-strip {

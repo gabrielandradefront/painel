@@ -1623,28 +1623,25 @@ function viewOperacional() {
       `;
     };
 
+    const hojeAtual = typeof iso === 'function' ? iso(new Date()) : hoje;
+    const ehHoje = (dataIni === hojeAtual && dataFim === hojeAtual);
+
     let cardResumos = `
       <div class="card">
         <h2>Central de Resumos por Período</h2>
-        <div class="mu" style="margin-bottom:12px;">Selecione um atalho rápido ou informe o intervalo de datas para separar o que já foi concluído do que segue planejado ou pendente:</div>
+        <div class="mu" style="margin-bottom:12px;">Informe a data inicial e a data final ou use o atalho Hoje para separar o que já foi concluído do que segue planejado ou pendente:</div>
 
         <div class="resumo-controls-bar">
-          <div class="fx resumo-presets-row" style="gap:6px; margin-bottom:0;">
-            <button type="button" class="b ${tipoAtual === 'dia' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="dia" title="Carregar e copiar briefing de hoje"><span class="ui-glyph" aria-hidden="true">☀\uFE0E</span> Hoje</button>
-            <button type="button" class="b ${tipoAtual === '1' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="1" title="Carregar e copiar compilado de 1 semana (7 dias)">1 Semana</button>
-            <button type="button" class="b ${tipoAtual === '2' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="2" title="Carregar e copiar compilado de 2 semanas (14 dias)">2 Semanas</button>
-            <button type="button" class="b ${tipoAtual === '3' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="3" title="Carregar e copiar compilado de 3 semanas (21 dias)">3 Semanas</button>
-            <button type="button" class="b ${tipoAtual === '4' ? 'p' : ''}" data-act="copiar_resumo" data-tipo="4" title="Carregar e copiar compilado do mês (4 semanas)">Mês (4 Sem.)</button>
-          </div>
           <div class="resumo-date-range">
             <label class="resumo-date-field" for="resumoDataIni">
-              <span>De</span>
+              <span>Data Inicial</span>
               <input type="date" id="resumoDataIni" value="${esc(dataIni)}">
             </label>
             <label class="resumo-date-field" for="resumoDataFim">
-              <span>Até</span>
+              <span>Data Final</span>
               <input type="date" id="resumoDataFim" value="${esc(dataFim)}">
             </label>
+            <button type="button" class="b ${ehHoje ? 'p' : ''} resumo-btn-hoje" data-act="copiar_resumo" data-tipo="dia" title="Preencher Data Inicial e Data Final com a data de hoje"><span class="ui-glyph" aria-hidden="true">☀\uFE0E</span> Hoje</button>
           </div>
         </div>
 
