@@ -682,6 +682,7 @@ let subTabSemana = 'docs';
 let orcSlideAtivo = 0; // 0 = Slide 1 (Dados e Tabela), 1 = Slide 2 (Gráficos)
 let modoOrcamentoAtual = (S && S.orc && S.orc.modo === 'pedido_fornecedor') ? 'pedido_fornecedor' : 'comparativo_fornecedores';
 let orcHistFiltroModo = 'todos';
+let orcHistSelecionados = new Set();
 let prodFiltroHist = '';
 let cotacaoBaseComparacao = null;
 let orcFornHistorico = '';

@@ -1106,6 +1106,340 @@ async function orcXlsx() {
   }
 }
 
+function orcHistObterVisiveis() {
+  const termosBusca = typeof getBuscaTermos === 'function' ? getBuscaTermos() : [];
+  const filtroHist = (typeof orcHistFiltroModo === 'string' && (orcHistFiltroModo === 'comparativo_fornecedores' || orcHistFiltroModo === 'pedido_fornecedor'))
+    ? orcHistFiltroModo
+    : 'todos';
+  const todoHist = Array.isArray(S && S.orcHist) ? S.orcHist : [];
+  const qtdComparativo = todoHist.filter(h => orcModo(h) === 'comparativo_fornecedores').length;
+  const qtdPedido = todoHist.filter(h => orcModo(h) === 'pedido_fornecedor').length;
+  const histPorModo = filtroHist === 'todos' ? todoHist : todoHist.filter(h => orcModo(h) === filtroHist);
+  const histExibidos = termosBusca.length
+    ? histPorModo.filter(h => {
+        const itensStr = (h.itens || []).map(x => `${x.forn || ''} ${x.nome || ''} ${x.obs || ''}`).join(' ');
+        return matchBusca(`${h.titulo || ''} ${h.fornecedor || ''} ${h.categoria || ''} ${h.obs || ''} ${h.data || ''} ${itensStr}`, termosBusca);
+      })
+    : histPorModo;
+  return { todoHist, filtroHist, qtdComparativo, qtdPedido, histPorModo, histExibidos, termosBusca };
+}
+
+function orcStatusEhAprovado(status) {
+  const n = norm(status || '');
+  return n === 'aprovado' || n === 'pedido feito' || n === 'a caminho' || n === 'entregue' || n === 'conferido';
+}
+
+function orcStatusGeralHistorico(h) {
+  if (!h || typeof h !== 'object') return 'Em análise';
+  if (typeof h.status === 'string' && h.status.trim()) return h.status.trim();
+  const itens = Array.isArray(h.itens) ? h.itens : [];
+  if (itens.some(it => orcStatusEhAprovado(it && it.status))) return 'Aprovado';
+  if (itens.some(it => norm((it && it.status) || '') === 'com problema')) return 'Com problema';
+  return 'Em análise';
+}
+
+function sanitizarNomeAbaExcel(titulo, usadosSet) {
+  const usados = usadosSet instanceof Set ? usadosSet : new Set();
+  let limpo = String(titulo ?? '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/[\\\/\?\*\[\]:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^'+|'+$/g, '')
+    .trim();
+
+  if (!limpo) limpo = 'Orcamento';
+
+  let base = limpo.slice(0, 31).trim().replace(/^'+|'+$/g, '').trim() || 'Orcamento';
+  let candidato = base;
+  let contador = 2;
+
+  while (usados.has(candidato.toLowerCase())) {
+    const sufixo = ` (${contador})`;
+    const maxBase = Math.max(1, 31 - sufixo.length);
+    const truncado = base.slice(0, maxBase).trim().replace(/'+$/g, '').trim() || 'Orcamento';
+    candidato = `${truncado}${sufixo}`;
+    contador++;
+  }
+
+  usados.add(candidato.toLowerCase());
+  return candidato;
+}
+
+function montarDadosAbaOrcamentoHist(h) {
+  const mHist = orcModo(h);
+  const ehPed = mHist === 'pedido_fornecedor';
+  const tituloCompleto = (h.titulo || (ehPed ? (h.fornecedor || 'Pedido Único') : 'Orçamento')).trim();
+  const dataFmt = h.data
+    ? (typeof brFull === 'function' ? brFull(h.data) : br(h.data))
+    : (typeof brFull === 'function' ? brFull(hoje) : br(hoje));
+  const statusGeral = orcStatusGeralHistorico(h);
+  const formatoDesc = ehPed
+    ? `Vários Itens / 1 Fornecedor${h.fornecedor ? ' — ' + h.fornecedor : ''}`
+    : '1 Item / Vários Fornecedores';
+  const qtdTotal = num(h.qtdTotal);
+  const unGeral = (h.unidade || '').trim();
+  const itensBrutos = Array.isArray(h.itens) ? [...h.itens] : [];
+  const itensOrdenados = ehPed ? itensBrutos : itensBrutos.sort((a, b) => itemTotal(a) - itemTotal(b));
+
+  const aoa = [
+    ['Título do Orçamento', tituloCompleto],
+    ['Data de Criação / Salvamento', dataFmt],
+    ['Status', statusGeral],
+    ['Formato / Categoria', `${formatoDesc}${h.categoria ? ' • ' + h.categoria : ''}`],
+    [],
+    [
+      'Fornecedor',
+      'Item / Descrição',
+      'Quantidade',
+      'Valor Unitário (R$)',
+      'Valor Total (R$)',
+      'Prazo / Condições',
+      'Link de Compra',
+      'Status'
+    ]
+  ];
+
+  const currencyCells = [];
+  const linkCells = [];
+
+  const totaisPositivos = itensOrdenados.map(it => orcItemSubtotal(it, mHist)).filter(v => v > 0);
+  const menorCotado = ehPed
+    ? itensOrdenados.reduce((acc, it) => acc + orcItemSubtotal(it, mHist), 0)
+    : (totaisPositivos.length ? Math.min(...totaisPositivos) : (itensOrdenados.length ? orcItemSubtotal(itensOrdenados[0], mHist) : 0));
+
+  let menorFornecedor = ehPed ? (h.fornecedor || '') : '';
+  const aprovadosItens = [];
+
+  itensOrdenados.forEach(it => {
+    const rIdx = aoa.length;
+    const rawLink = (it.link || '').trim() || (typeof safeHttpUrl === 'function' && safeHttpUrl(it.obs) ? (it.obs || '').trim() : '') || (ehPed ? (h.link || '').trim() : '');
+    const linkSeguro = typeof safeHttpUrl === 'function' ? safeHttpUrl(rawLink) : '';
+
+    let fornecedor = '';
+    let itemDesc = '';
+    let quantidadeStr = '';
+    let valorUnit = 0;
+    let valorTotal = 0;
+    let prazoCond = '';
+    let statusItem = '';
+
+    if (ehPed) {
+      const q = orcItemQtd(it);
+      const un = (it.un || unGeral || 'un').trim();
+      fornecedor = (h.fornecedor || it.forn || 'Fornecedor único').trim();
+      itemDesc = (it.nome || tituloCompleto).trim();
+      quantidadeStr = `${q}${un ? ' ' + un : ''}`;
+      valorUnit = num(it.valorUnd);
+      valorTotal = q * valorUnit;
+      const obsLimpa = (it.obs && (!linkSeguro || it.obs.trim() !== rawLink)) ? it.obs.trim() : '';
+      prazoCond = [it.prazo, it.condicoes, obsLimpa, h.obs].map(x => String(x || '').trim()).filter(Boolean).join(' • ') || '—';
+      const stBruto = (it.status || statusGeral || 'Em análise').trim();
+      if (orcStatusEhAprovado(stBruto)) {
+        statusItem = `✓ ${stBruto} (Vencedor)`;
+        aprovadosItens.push({ fornecedor, total: valorTotal });
+      } else {
+        statusItem = stBruto;
+      }
+    } else {
+      const freteVal = itemFrete(it);
+      const qItem = (it.qtd !== undefined && it.qtd !== '') ? num(it.qtd) : (qtdTotal > 0 ? qtdTotal : 1);
+      const un = (it.un || unGeral).trim();
+      fornecedor = (it.forn || 'Fornecedor não informado').trim();
+      itemDesc = (it.nome || tituloCompleto).trim();
+      quantidadeStr = `${qItem}${un ? ' ' + un : ''}`;
+      valorTotal = itemTotal(it);
+      valorUnit = orcItemValorUnitario(it, mHist, qtdTotal);
+      const freteTxt = freteVal > 0 ? `Frete: ${brl(freteVal)}` : ((it.frete === 0 || it.frete === '0') ? 'Frete grátis' : '');
+      const obsLimpa = (it.obs && (!linkSeguro || it.obs.trim() !== rawLink)) ? it.obs.trim() : '';
+      prazoCond = [it.prazo, it.condicoes, freteTxt, obsLimpa, h.obs].map(x => String(x || '').trim()).filter(Boolean).join(' • ') || '—';
+
+      const stBruto = (it.status || 'Aguardando aprovação').trim();
+      const ehAprovado = orcStatusEhAprovado(stBruto);
+      const ehMenor = menorCotado > 0 && Math.abs(valorTotal - menorCotado) < 0.005;
+      if (ehMenor && !menorFornecedor) menorFornecedor = fornecedor;
+
+      if (ehAprovado) {
+        statusItem = `✓ ${stBruto} (Vencedor)`;
+        aprovadosItens.push({ fornecedor, total: valorTotal });
+      } else if (ehMenor) {
+        statusItem = `${stBruto} • ★ Menor oferta`;
+      } else {
+        statusItem = stBruto;
+      }
+    }
+
+    aoa.push([
+      fornecedor,
+      itemDesc,
+      quantidadeStr,
+      Number(valorUnit.toFixed(2)),
+      Number(valorTotal.toFixed(2)),
+      prazoCond,
+      linkSeguro || '—',
+      statusItem
+    ]);
+
+    currencyCells.push({ r: rIdx, c: 3 }, { r: rIdx, c: 4 });
+    if (linkSeguro) linkCells.push({ r: rIdx, c: 6, url: linkSeguro });
+  });
+
+  if (!itensOrdenados.length) {
+    aoa.push(['—', 'Nenhum fornecedor ou item registrado nesta cotação', '—', 0, 0, h.obs || '—', h.link || '—', statusGeral]);
+  }
+
+  aoa.push([]);
+
+  const valorAprovadoNum = aprovadosItens.length
+    ? Number(aprovadosItens.reduce((acc, x) => acc + x.total, 0).toFixed(2))
+    : null;
+  const nomesAprovados = [...new Set(aprovadosItens.map(x => x.fornecedor).filter(Boolean))].join(', ');
+
+  const rowMenorIdx = aoa.length;
+  aoa.push([
+    'RESUMO',
+    ehPed ? 'Valor total do pedido' : 'Menor valor cotado',
+    '',
+    '',
+    Number((menorCotado || 0).toFixed(2)),
+    menorFornecedor ? `Fornecedor: ${menorFornecedor}` : '—',
+    '',
+    ehPed ? statusGeral : '★ Melhor oferta'
+  ]);
+  currencyCells.push({ r: rowMenorIdx, c: 4 });
+
+  const rowAprovIdx = aoa.length;
+  aoa.push([
+    'RESUMO',
+    'Valor aprovado',
+    '',
+    '',
+    valorAprovadoNum !== null ? valorAprovadoNum : 'Não aprovado',
+    nomesAprovados ? `Aprovado: ${nomesAprovados}` : 'Nenhum fornecedor aprovado',
+    '',
+    valorAprovadoNum !== null ? '✓ Aprovado' : 'Em análise'
+  ]);
+  if (valorAprovadoNum !== null) currencyCells.push({ r: rowAprovIdx, c: 4 });
+
+  // Larguras automáticas (!cols) com limites equilibrados para leitura no Excel / Google Sheets
+  const minW = [22, 24, 13, 20, 20, 22, 22, 24];
+  const maxW = [38, 44, 20, 22, 22, 40, 42, 34];
+  const cols = minW.map((minWidth, cIdx) => {
+    let maior = minWidth;
+    for (let r = 0; r < aoa.length; r++) {
+      const val = aoa[r][cIdx];
+      if (val === null || val === undefined) continue;
+      const txt = typeof val === 'number' ? brl(val) : String(val);
+      // Evita que textos longos de cabeçalho (linhas 0..3 col 1) distorçam larguras além do limite
+      const peso = (r < 4 && cIdx === 1) ? Math.min(txt.length, maxW[cIdx]) : txt.length;
+      if (peso + 3 > maior) maior = peso + 3;
+    }
+    return { wch: Math.min(maxW[cIdx], Math.max(minWidth, maior)) };
+  });
+
+  return { aoa, cols, currencyCells, linkCells, tituloCompleto };
+}
+
+async function exportarOrcamentosHistoricoXlsx(idsOpt) {
+  const conjunto = idsOpt
+    ? new Set(Array.isArray(idsOpt) ? idsOpt : [...idsOpt])
+    : (typeof orcHistSelecionados !== 'undefined' && orcHistSelecionados instanceof Set ? orcHistSelecionados : new Set());
+
+  const selecionados = (S.orcHist || []).filter(h => h && conjunto.has(h.id));
+  if (!selecionados.length) {
+    toast('Selecione ao menos um orçamento no histórico para exportar.');
+    return false;
+  }
+
+  const dataHojeIso = typeof iso === 'function' ? iso(new Date()) : hoje;
+  const nomeArquivo = `Orcamentos_Consolidados_${dataHojeIso}.xlsx`;
+  const nomesUsados = new Set();
+
+  if (typeof window !== 'undefined' && window.XLSX && window.XLSX.utils) {
+    try {
+      toast(`Gerando planilha com ${selecionados.length} aba(s)...`);
+      const XLSX = window.XLSX;
+      const wb = XLSX.utils.book_new();
+      wb.Props = {
+        Title: 'Orçamentos Consolidados — ARGOS OPS',
+        Author: 'ARGOS OPS',
+        CreatedDate: new Date()
+      };
+
+      selecionados.forEach(h => {
+        const dados = montarDadosAbaOrcamentoHist(h);
+        const nomeAba = sanitizarNomeAbaExcel(dados.tituloCompleto, nomesUsados);
+        const ws = XLSX.utils.aoa_to_sheet(dados.aoa);
+        ws['!cols'] = dados.cols;
+
+        dados.currencyCells.forEach(({ r, c }) => {
+          const ref = XLSX.utils.encode_cell({ r, c });
+          if (ws[ref] && typeof ws[ref].v === 'number') {
+            ws[ref].t = 'n';
+            ws[ref].z = '"R$ "#,##0.00';
+          }
+        });
+
+        dados.linkCells.forEach(({ r, c, url }) => {
+          const ref = XLSX.utils.encode_cell({ r, c });
+          if (ws[ref] && url) {
+            ws[ref].l = { Target: url, Tooltip: 'Abrir link de compra' };
+          }
+        });
+
+        XLSX.utils.book_append_sheet(wb, ws, nomeAba);
+      });
+
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const ok = await salvarArquivo(
+        nomeArquivo,
+        new Uint8Array(wbout),
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      if (ok) toast(`✓ Planilha exportada com ${selecionados.length} aba(s)!`);
+      return ok;
+    } catch (err) {
+      console.error('Erro ao exportar planilha consolidada via SheetJS:', err);
+      toast('Erro ao gerar a planilha consolidada.');
+      return false;
+    }
+  }
+
+  // Fallback seguro caso SheetJS (CDN) esteja indisponível, utilizando ExcelJS se presente
+  if (typeof window !== 'undefined' && window.ExcelJS) {
+    try {
+      toast(`Gerando planilha com ${selecionados.length} aba(s)...`);
+      const wb = new window.ExcelJS.Workbook();
+      wb.creator = 'ARGOS OPS';
+      wb.created = new Date();
+      selecionados.forEach(h => {
+        const dados = montarDadosAbaOrcamentoHist(h);
+        const nomeAba = sanitizarNomeAbaExcel(dados.tituloCompleto, nomesUsados);
+        const ws = wb.addWorksheet(nomeAba);
+        dados.aoa.forEach(linha => ws.addRow(linha));
+        dados.currencyCells.forEach(({ r, c }) => {
+          const cell = ws.getRow(r + 1).getCell(c + 1);
+          if (typeof cell.value === 'number') cell.numFmt = '"R$ "#,##0.00';
+        });
+        ws.columns = dados.cols.map(col => ({ width: col.wch }));
+      });
+      const buffer = await wb.xlsx.writeBuffer();
+      const ok = await salvarArquivo(
+        nomeArquivo,
+        new Uint8Array(buffer),
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      if (ok) toast(`✓ Planilha exportada com ${selecionados.length} aba(s)!`);
+      return ok;
+    } catch (err) {
+      console.error('Erro no fallback ExcelJS:', err);
+    }
+  }
+
+  toast('Biblioteca de exportação (.xlsx) não carregou. Verifique a conexão e tente novamente.');
+  return false;
+}
+
 function orcCopy() {
   const modo = orcModo();
   const itens = S.orc.itens || [];
@@ -1635,19 +1969,15 @@ function viewOrc() {
   }
 
   // 2. Gráfico e Histórico de Variação por Produto / Título (respeita filtro visual se aplicado)
-  const filtroHist = (typeof orcHistFiltroModo === 'string' && (orcHistFiltroModo === 'comparativo_fornecedores' || orcHistFiltroModo === 'pedido_fornecedor'))
-    ? orcHistFiltroModo
-    : 'todos';
-  const todoHist = S.orcHist || [];
-  const qtdComparativo = todoHist.filter(h => orcModo(h) === 'comparativo_fornecedores').length;
-  const qtdPedido = todoHist.filter(h => orcModo(h) === 'pedido_fornecedor').length;
-  const histPorModo = filtroHist === 'todos' ? todoHist : todoHist.filter(h => orcModo(h) === filtroHist);
-  const histExibidos = termosBusca.length
-    ? histPorModo.filter(h => {
-        const itensStr = (h.itens || []).map(x => `${x.forn || ''} ${x.nome || ''} ${x.obs || ''}`).join(' ');
-        return matchBusca(`${h.titulo || ''} ${h.fornecedor || ''} ${h.categoria || ''} ${h.obs || ''} ${h.data || ''} ${itensStr}`, termosBusca);
-      })
-    : histPorModo;
+  const { todoHist, filtroHist, qtdComparativo, qtdPedido, histExibidos } = orcHistObterVisiveis();
+
+  // Remove da seleção IDs de orçamentos que não existem mais no histórico
+  if (typeof orcHistSelecionados !== 'undefined' && orcHistSelecionados instanceof Set) {
+    const idsValidos = new Set(todoHist.map(h => h && h.id).filter(Boolean));
+    [...orcHistSelecionados].forEach(selId => {
+      if (!idsValidos.has(selId)) orcHistSelecionados.delete(selId);
+    });
+  }
 
   const produtosDisponiveis = [...new Set(histExibidos.map(h => (h.titulo || '').trim()).filter(Boolean))].sort();
   const prodAtivo = (prodFiltroHist && produtosDisponiveis.some(p => norm(p) === norm(prodFiltroHist)))
@@ -1710,10 +2040,35 @@ function viewOrc() {
     ? '1 Item / Vários Fornecedores'
     : (filtroHist === 'pedido_fornecedor' ? 'Vários Itens / 1 Fornecedor' : 'Todos os tipos');
 
+  const qtdSelecionados = (typeof orcHistSelecionados !== 'undefined' && orcHistSelecionados instanceof Set)
+    ? orcHistSelecionados.size
+    : 0;
+  const todosVisiveisSelecionados = histExibidos.length > 0 &&
+    histExibidos.every(h => typeof orcHistSelecionados !== 'undefined' && orcHistSelecionados.has(h.id));
+
+  const barraSelecaoHtml = qtdSelecionados > 0
+    ? `
+      <div class="orc-hist-bulk-bar" role="region" aria-label="Exportação de orçamentos selecionados">
+        <div class="orc-hist-bulk-info">
+          <span class="orc-hist-bulk-count"><b>${qtdSelecionados}</b> orçamento(s) selecionado(s)</span>
+          <span class="orc-hist-bulk-sep" aria-hidden="true">·</span>
+          <button type="button" class="orc-hist-bulk-link" data-act="orc_hist_sel_todos" ${!histExibidos.length || todosVisiveisSelecionados ? 'disabled' : ''}>Selecionar todos</button>
+          <span class="orc-hist-bulk-sep" aria-hidden="true">·</span>
+          <button type="button" class="orc-hist-bulk-link" data-act="orc_hist_sel_limpar">Limpar</button>
+        </div>
+        <button type="button" class="b p orc-hist-export-btn" data-act="orc_hist_exportar_xlsx" title="Exportar orçamentos selecionados em planilha única com abas">
+          <span class="ui-glyph" aria-hidden="true">⇩</span> Exportar Planilha (.XLSX)
+        </button>
+      </div>
+    `
+    : '';
+
   const historicoListaCards = histExibidos.map(h => {
     const mHist = orcModo(h);
     const ehPedHist = mHist === 'pedido_fornecedor';
     const combinaModoAtivo = mHist === modo;
+    const selecionado = typeof orcHistSelecionados !== 'undefined' && orcHistSelecionados.has(h.id);
+    const tituloCard = h.titulo || (ehPedHist ? (h.fornecedor || 'Pedido Único') : 'Cotação');
     const hItens = h.itens || [];
     const totalRef = orcTotalReferencia(h);
     const tagModo = ehPedHist
@@ -1740,11 +2095,14 @@ function viewOrc() {
       : '';
 
     return `
-      <div class="orc-hist-card ${combinaModoAtivo ? 'modo-ativo' : 'modo-outro'}">
+      <div class="orc-hist-card ${combinaModoAtivo ? 'modo-ativo' : 'modo-outro'} ${selecionado ? 'is-selected' : ''}">
         <div class="orc-hist-head">
+          <label class="orc-hist-check-wrap" title="${selecionado ? 'Desmarcar orçamento' : 'Selecionar orçamento para exportar em planilha'}">
+            <input type="checkbox" class="orc-hist-checkbox" data-act="orc_hist_toggle_sel" data-id="${esc(h.id)}" ${selecionado ? 'checked' : ''} aria-label="Selecionar orçamento ${esc(tituloCard)}">
+          </label>
           <div class="orc-hist-meta">
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <b>${esc(h.titulo || (ehPedHist ? (h.fornecedor || 'Pedido Único') : 'Cotação'))} — ${br(h.data)}</b>
+              <b>${esc(tituloCard)} — ${br(h.data)}</b>
               ${tagModo}
               ${h.categoria ? `<span class="pill b" style="font-size:10px; padding:1px 7px;">${esc(h.categoria)}</span>` : ''}
               ${badgeModoAtivo}
@@ -1819,8 +2177,9 @@ function viewOrc() {
           </div>
         </div>
         <div class="mu" style="margin-bottom:10px;">
-          Exibindo: <b>${rotuloFiltro}</b>. Clique em <b>"Carregar na Tela"</b> para abrir qualquer orçamento arquivado no modo correspondente e comparar reajustes:
+          Exibindo: <b>${rotuloFiltro}</b>. Marque os orçamentos desejados para exportar em planilha única (.xlsx) ou clique em <b>"Carregar na Tela"</b> para comparar reajustes:
         </div>
+        ${barraSelecaoHtml}
         <div style="max-height:380px; overflow-y:auto;">
           ${historicoListaCards}
         </div>

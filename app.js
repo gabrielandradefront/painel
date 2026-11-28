@@ -1706,7 +1706,7 @@ document.addEventListener('click', async e => {
   });
   if (a === 'del_reparo') confirmarExclusao(t, () => { S.reparos = S.reparos.filter(x => x.id !== id); save(); render(); toast('Excluído'); });
   if (a === 'del_orcitem') confirmarExclusao(t, () => { S.orc.itens = S.orc.itens.filter(x => x.id !== id); save(); render(); toast('Cotação excluída'); });
-  if (a === 'del_orchist') confirmarExclusao(t, () => { S.orcHist = S.orcHist.filter(x => x.id !== id); save(); render(); toast('Removido'); });
+  if (a === 'del_orchist') confirmarExclusao(t, () => { S.orcHist = S.orcHist.filter(x => x.id !== id); if (typeof orcHistSelecionados !== 'undefined') orcHistSelecionados.delete(id); save(); render(); toast('Removido'); });
 
   if (a === 'limpar_aulas_passadas') {
     confirmarExclusao(t, () => {
@@ -1742,6 +1742,7 @@ document.addEventListener('click', async e => {
   if (a === 'limpar_orchist') {
     confirmarExclusao(t, () => {
       S.orcHist = [];
+      if (typeof orcHistSelecionados !== 'undefined') orcHistSelecionados.clear();
       save(); 
       render(); 
       toast('Histórico de cotações arquivadas limpo!');
@@ -1850,6 +1851,27 @@ document.addEventListener('click', async e => {
   if (a === 'orc_tog_filtro_hist_modo') {
     orcHistFiltroModo = 'todos';
     render();
+    return;
+  }
+  if (a === 'orc_hist_sel_todos') {
+    if (typeof orcHistSelecionados !== 'undefined' && typeof orcHistObterVisiveis === 'function') {
+      const { histExibidos } = orcHistObterVisiveis();
+      histExibidos.forEach(h => { if (h && h.id) orcHistSelecionados.add(h.id); });
+      render();
+    }
+    return;
+  }
+  if (a === 'orc_hist_sel_limpar') {
+    if (typeof orcHistSelecionados !== 'undefined') {
+      orcHistSelecionados.clear();
+      render();
+    }
+    return;
+  }
+  if (a === 'orc_hist_exportar_xlsx') {
+    if (typeof exportarOrcamentosHistoricoXlsx === 'function') {
+      await exportarOrcamentosHistoricoXlsx();
+    }
     return;
   }
   if (a === 'orc_limpar_comparacao') {
@@ -2254,6 +2276,15 @@ document.addEventListener('change', async e => {
   if (a === 'rep_st') { const r = find('reparos', t.dataset.id); if (r) { r.status = t.value; r.feito = (t.value === 'Concluído'); r.dataConc = r.feito ? hoje : ''; save(); render(); } }
   if (a === 'rep_check') { const r = find('reparos', t.dataset.id); if (r) { r.status = t.checked ? 'Concluído' : 'Pendente'; r.feito = t.checked; r.dataConc = t.checked ? hoje : ''; save(); render(); } }
   if (a === 'orcs') { const i = (S.orc.itens || []).find(x => x.id === t.dataset.id); if (i) { i.status = t.value; save(); render(); } }
+  if (a === 'orc_hist_toggle_sel') {
+    const hid = t.dataset.id;
+    if (hid && typeof orcHistSelecionados !== 'undefined') {
+      if (t.checked) orcHistSelecionados.add(hid);
+      else orcHistSelecionados.delete(hid);
+      render();
+    }
+    return;
+  }
   if (a === 'orcf_sel') {
     const i = (S.orc.itens || []).find(x => x.id === t.dataset.id);
     if (i) {
